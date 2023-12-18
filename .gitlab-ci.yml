@@ -1,0 +1,25 @@
+generate pipeline:
+  image: ubuntu:latest
+  variables:
+    SINGULARITY_VERSION: 4.0.2
+    S3CMD_VERSION: 2.3.0
+  script:
+    - apt-get update && apt-get install -y ca-certificates git podman python3 python3-pip skopeo
+    - pip install --upgrade pip setuptools
+    - pip install -e ./job_creator
+    - jc --singularity-version ${SINGULARITY_VERSION} --s3cmd-version ${S3CMD_VERSION}
+  artifacts:
+    when: always
+    paths:
+      - generated_pipeline.yaml
+      - job_creator.log
+
+run pipeline:
+  needs:
+    - job: generate pipeline
+      artifacts: true
+  trigger:
+    include:
+      - artifact: generated_pipeline.yaml
+        job: generate pipeline
+    strategy: depend

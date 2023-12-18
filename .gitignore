@@ -1,0 +1,6 @@
+*.log
+.*.swp
+*.egg-info
+generated_pipeline.yaml
+spack
+__pycache__

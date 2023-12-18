@@ -1,0 +1,13 @@
+diff --git a/lib/spack/spack/fetch_strategy.py b/lib/spack/spack/fetch_strategy.py
+index 319aed95ca..f381b53c0f 100644
+--- a/lib/spack/spack/fetch_strategy.py
++++ b/lib/spack/spack/fetch_strategy.py
+@@ -955,7 +955,7 @@ def clone(self, dest=None, commit=None, branch=None, tag=None, bare=False):
+                 git(*args)
+ 
+     def archive(self, destination):
+-        super(GitFetchStrategy, self).archive(destination, exclude=".git")
++        super(GitFetchStrategy, self).archive(destination)
+ 
+     @_needs_stage
+     def reset(self):
