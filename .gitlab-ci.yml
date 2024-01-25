@@ -1,5 +1,12 @@
+stages:
+  - unit tests
+  - generate
+  - build base containers
+  - build cache
+
 generate pipeline:
   image: ubuntu:latest
+  stage: generate
   variables:
     SINGULARITY_VERSION: 4.0.2
     S3CMD_VERSION: 2.3.0
@@ -7,14 +14,16 @@ generate pipeline:
     - apt-get update && apt-get install -y ca-certificates git podman python3 python3-pip skopeo
     - pip install --upgrade pip setuptools
     - pip install -e ./job_creator
-    - jc --singularity-version ${SINGULARITY_VERSION} --s3cmd-version ${S3CMD_VERSION}
+    - jc create-jobs --singularity-version ${SINGULARITY_VERSION} --s3cmd-version ${S3CMD_VERSION}
   artifacts:
     when: always
     paths:
       - generated_pipeline.yaml
+      - merged_spack*yaml
       - job_creator.log
 
 run pipeline:
+  stage: build base containers
   needs:
     - job: generate pipeline
       artifacts: true
@@ -23,3 +32,71 @@ run pipeline:
       - artifact: generated_pipeline.yaml
         job: generate pipeline
     strategy: depend
+
+gather child artifacts:
+  stage: build cache
+  needs: [run pipeline]
+  image: ubuntu:latest
+  script:
+    - apt-get update && apt-get install -y ca-certificates git python3 python3-pip unzip
+    - pip install --upgrade pip setuptools
+    - pip install -e ./get_artifacts
+    - ga -P ${CI_PIPELINE_ID} -t ${GITLAB_API_TOKEN}
+    - for zipfile in $(ls artifacts*zip); do
+    -    unzip ${zipfile} -d ${zipfile%%.zip}
+    -    rm -f ${zipfile}
+    -    architecture=$(echo ${zipfile##artifacts.} | sed 's/.zip//')
+    -    echo ${architecture}=yes > build.env
+    - done
+    - cat build.env
+  artifacts:
+    when: always
+    paths:
+      - artifacts.*
+    reports:
+      dotenv: build.env
+
+run spack-generated jobs for amd64:
+  stage: build cache
+  needs:
+    - job: gather child artifacts
+      artifacts: true
+  trigger:
+    include:
+      - artifact: artifacts.amd64/spack_pipeline.yaml
+        job: gather child artifacts
+    strategy: depend
+
+# run spack-generated jobs for arm64:
+#   needs:
+#     - job: gather child artifacts
+#       artifacts: true
+#   trigger:
+#     include:
+#       - artifact: artifacts.arm64/spack_pipeline.yaml
+#         job: gather child artifacts
+#     strategy: depend
+#   rules:
+#     - allow_failure: true
+
+
+test spackitor:
+  stage: unit tests
+  image: python:3.10-buster
+  script:
+    - pip install './spackitor[test]'
+    - coverage run -m pytest --junit-xml=unittests.xml -vs spackitor/tests
+    - coverage report
+    - coverage xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - spackitor/**
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: unittests.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml

@@ -3,14 +3,13 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "job_creator"
+name = "get_artifacts"
 version = "0.1.0"
 dependencies = [
     "click",
-    "gitpython",
-    "natsort",
-    "ruamel.yaml"
+    "furl",
+    "requests",
 ]
 
 [project.scripts]
-jc = "job_creator.__main__:jc"
+ga = "get_artifacts.__main__:get_artifacts"

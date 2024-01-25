@@ -65,7 +65,7 @@ RUN cd /opt \
 
 # This will list any missing packages that should be installed via apt.
 RUN spack bootstrap status
-RUN spack spec hdf5+mpi
+RUN spack bootstrap now
 # Add the BBP build cache, this should only allow _read_ access.
 RUN echo "Mirror URL is .${MIRROR_URL}. and CACHE_BUCKET is .${CACHE_BUCKET}."
 RUN if [ -n "${MIRROR_URL}" ]; then spack mirror add --s3-endpoint-url ${MIRROR_URL} bbpS3 ${CACHE_BUCKET}; fi

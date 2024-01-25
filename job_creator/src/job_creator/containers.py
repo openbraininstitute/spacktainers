@@ -12,26 +12,14 @@ from functools import cached_property
 
 from git import Repo
 
-from job_creator.job_templates import buildah_yaml, multiarch_yaml
+from job_creator.architectures import architecture_map
+from job_creator.ci_objects import Job, Workflow
+from job_creator.job_templates import (buildah_build_yaml,
+                                       buildah_include_yaml, multiarch_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("job_creator")
-
-
-architecture_map = {
-    "amd64": {
-        "tag": "kubernetes",
-        "proxy": True,
-        "cache_bucket": "spack-build-cache",
-        "mirror_url": "https://bbpobjectstorage.epfl.ch",
-    },
-    "arm64": {
-        "tag": "aws_graviton",
-        "proxy": False,
-        "cache_bucket": "spack-cache-xlme2pbun4",
-    },
-}
 
 
 class ImageNotFoundError(Exception):
@@ -47,6 +35,7 @@ class BaseContainer:
         registry="bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/",
     ):
         self.name = name
+        self.job_name = f"build {self.name}"
         self.registry = registry
         self.registry_image = f"{os.environ.get('CI_REGISTRY_IMAGE')}/{build_path}"
         self._container_checksum = None
@@ -66,12 +55,10 @@ class BaseContainer:
         if os.environ.get("CI_COMMIT_BRANCH") != os.environ.get("CI_DEFAULT_BRANCH"):
             self.registry_image_tag += f"-{os.environ.get('CI_COMMIT_BRANCH')}"
 
-        self.multiarch_job = {}
-        self.build_workflow = copy.deepcopy(buildah_yaml)
-        self.build_workflow["build"]["variables"][
-            "REGISTRY_IMAGE_TAG"
-        ] = self.registry_image_tag
-        self.workflow = {}
+        self.workflow = Workflow(**copy.deepcopy(buildah_include_yaml))
+
+    def generate(self):
+        raise NotImplementedError("Children must implement this")
 
     def needs_build(self):
         raise NotImplementedError("Children must implement this")
@@ -99,21 +86,32 @@ class BaseContainer:
             os.environ.get("CI_REGISTRY_PASSWORD"),
             os.environ.get("CI_REGISTRY"),
         ]
-        skopeo_inspect_cmd = [
-            "skopeo",
-            "inspect",
-            f"docker://{self.registry_image}:{self.registry_image_tag}",
-        ]
         logger.debug(f"Running `{skopeo_login_cmd}`")
         subprocess.run(skopeo_login_cmd)
-        logger.debug(f"Running `{skopeo_inspect_cmd}`")
-        result = subprocess.run(skopeo_inspect_cmd, capture_output=True)
 
-        if result.returncode != 0:
-            raise ImageNotFoundError(
-                f"Image {self.name}:{self.registry_image_tag} not found in {ci_registry}"
-            )
-        container_info = json.loads(result.stdout)
+        for architecture in self.architectures:
+            skopeo_inspect_cmd = [
+                "skopeo",
+                "inspect",
+                f"--override-arch={architecture}",
+                f"docker://{self.registry_image}:{self.registry_image_tag}",
+            ]
+            logger.debug(f"Running `{skopeo_inspect_cmd}`")
+            result = subprocess.run(skopeo_inspect_cmd, capture_output=True)
+
+            if result.returncode != 0:
+                raise ImageNotFoundError(
+                    f"Image {self.name}:{self.registry_image_tag} not found in {ci_registry}"
+                )
+            container_info = json.loads(result.stdout)
+
+            # if the override-arch is not found, skopeo just returns whatever other arch
+            # is available without complaining. Thanks, skopeo!
+            if container_info["Architecture"] != architecture:
+                raise ImageNotFoundError(
+                    f"Image {self.name}:{self.registry_image_tag} with architecture {architecture} not found in {ci_registry}"
+                )
+
         return container_info
 
     def update_before_script(self, job_name, lines):
@@ -127,46 +125,26 @@ class BaseContainer:
             self.workflow[job_name]["before_script"] = lines
 
     def compose_workflow(self):
-        for architecture in self.architectures:
-            job_name = self.architecture_jobs[architecture]
-            self.workflow[job_name] = copy.deepcopy(self.build_workflow["build"])
-            self.workflow[job_name]["tags"] = [architecture_map[architecture]["tag"]]
-            self.workflow[job_name]["variables"][
-                "CI_REGISTRY_IMAGE"
-            ] = self.registry_image
-
-            if len(self.architectures) > 1:
-                self.workflow[job_name]["variables"][
+        if len(self.architectures) > 1:
+            for job in self.workflow.jobs:
+                job.variables[
                     "REGISTRY_IMAGE_TAG"
-                ] = f"{self.workflow[job_name]['variables']['REGISTRY_IMAGE_TAG']}-{architecture}"
+                ] = f"{job.variables['REGISTRY_IMAGE_TAG']}-{job.architecture}"
 
-            if not architecture_map[architecture].get("proxy", True):
-                before_script = ["unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY"]
-                self.update_before_script(job_name, before_script)
+        self.create_multiarch_job()
 
-        self.workflow["include"] = self.build_workflow["include"]
-
+    def create_multiarch_job(self):
         if len(self.architectures) > 1:
             multiarch_job_name = f"create multiarch for {self.name}"
-            self.multiarch_job = copy.deepcopy(multiarch_yaml)
-            self.multiarch_job[multiarch_job_name] = self.multiarch_job.pop(
-                "create-multiarch"
-            )
-            self.multiarch_job[multiarch_job_name]["needs"] = list(
-                self.architecture_jobs.values()
-            )
-            for idx, line in enumerate(
-                self.multiarch_job[multiarch_job_name]["script"]
-            ):
-                self.multiarch_job[multiarch_job_name]["script"][idx] = line.replace(
+            multiarch_job = Job(multiarch_job_name, **copy.deepcopy(multiarch_yaml))
+            multiarch_job.needs = [job.name for job in self.workflow.jobs]
+            logger.debug("Replace placeholders in multiarch job script")
+            for idx, line in enumerate(multiarch_job.script):
+                multiarch_job.script[idx] = line.replace(
                     "%REGISTRY_IMAGE%", self.registry_image
                 ).replace("%REGISTRY_IMAGE_TAG%", self.registry_image_tag)
 
-            self.workflow.update(self.multiarch_job)
-            if "stages" in self.workflow and "multiarch" not in self.workflow["staes"]:
-                self.workflow["stages"].append("multiarch")
-            elif "stages" not in self.workflow:
-                self.workflow["stages"] = ["build", "multiarch"]
+            self.workflow.add_job(multiarch_job)
 
 
 class Spacktainerizer(BaseContainer):
@@ -196,6 +174,7 @@ class Spacktainerizer(BaseContainer):
             container_info = self.inspect_image()
         except ImageNotFoundError as ex:
             logger.info(ex)
+            logger.info(f"We'll have to build {self.name}")
             return True
         logger.debug("Image found!")
 
@@ -221,7 +200,7 @@ class Spacktainerizer(BaseContainer):
 
     def generate(self):
         if not self.needs_build():
-            return {}
+            return Workflow()
 
         buildah_extra_args = [
             f'--label org.opencontainers.image.title="{self.name}"',
@@ -229,27 +208,35 @@ class Spacktainerizer(BaseContainer):
             f'--label ch.epfl.bbpgitlab.spack_commit="{self.spack_commit}"',
             f'--label ch.epfl.bbpgitlab.container_checksum="{self.container_checksum}"',
         ]
-        self.build_workflow["build"]["variables"][
-            "BUILDAH_EXTRA_ARGS"
-        ] += f" {' '.join(buildah_extra_args)}"
-        self.build_workflow["build"]["variables"]["BUILD_PATH"] = self.build_path
-
-        self.compose_workflow()
 
         for architecture in self.architectures:
-            job_name = self.architecture_jobs[architecture]
-            if cache_bucket := architecture_map[architecture].get("cache_bucket"):
-                self.workflow[job_name]["variables"][
+            arch_job = Job(
+                self.job_name, architecture, **copy.deepcopy(buildah_build_yaml)
+            )
+            arch_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
+            arch_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
+            arch_job.variables[
+                "BUILDAH_EXTRA_ARGS"
+            ] += f" {' '.join(buildah_extra_args)}"
+            arch_job.variables["BUILD_PATH"] = self.build_path
+            cache_bucket = architecture_map[architecture]["cache_bucket"]
+            arch_job.variables[
+                "BUILDAH_EXTRA_ARGS"
+            ] += f' --build-arg CACHE_BUCKET="s3://{cache_bucket["name"]}"'
+            if endpoint_url := architecture_map[architecture]["cache_bucket"].get(
+                "endpoint_url"
+            ):
+                arch_job.variables[
                     "BUILDAH_EXTRA_ARGS"
-                ] += f' --build-arg CACHE_BUCKET="s3://{cache_bucket}"'
-            if mirror_url := architecture_map[architecture].get("mirror_url"):
-                self.workflow[job_name]["variables"][
-                    "BUILDAH_EXTRA_ARGS"
-                ] += f' --build-arg MIRROR_URL="{mirror_url}"'
-            copy_key = [
-                'cp "$SPACK_DEPLOYMENT_KEY_PUBLIC" "$CI_PROJECT_DIR/builder/key.pub"'
-            ]
-            self.update_before_script(job_name, copy_key)
+                ] += f' --build-arg MIRROR_URL="{endpoint_url}"'
+
+            arch_job.update_before_script(
+                ['cp "$SPACK_DEPLOYMENT_KEY_PUBLIC" "$CI_PROJECT_DIR/builder/key.pub"'],
+                append=True,
+            )
+            self.workflow.add_job(arch_job)
+
+        self.compose_workflow()
 
         return self.workflow
 
@@ -260,12 +247,13 @@ class Singularitah(BaseContainer):
         self.singularity_version = singularity_version
         self.s3cmd_version = s3cmd_version
 
-    def needs_build(self):
+    def needs_build(self) -> bool:
         logger.info(f"Checking whether we need to build {self.name}")
         try:
             container_info = self.inspect_image()
         except ImageNotFoundError as ex:
             logger.info(ex)
+            logger.info(f"We'll have to build {self.name}")
             return True
         logger.debug(f"Image {self.name} found")
 
@@ -289,9 +277,9 @@ class Singularitah(BaseContainer):
         logger.info(f"We'll have to build {self.name}")
         return True
 
-    def generate(self):
+    def generate(self) -> Workflow:
         if not self.needs_build():
-            return {}
+            return Workflow()
 
         buildah_extra_args = [
             f'--label org.opencontainers.image.title="{self.name}"',
@@ -302,11 +290,41 @@ class Singularitah(BaseContainer):
             f'--build-arg SINGULARITY_VERSION="{self.singularity_version}"',
             f'--build-arg S3CMD_VERSION="{self.s3cmd_version}"',
         ]
-        self.build_workflow["build"]["variables"][
-            "BUILDAH_EXTRA_ARGS"
-        ] += f" {' '.join(buildah_extra_args)}"
-        self.build_workflow["build"]["variables"]["BUILD_PATH"] = self.build_path
+        for architecture in self.architectures:
+            build_job = Job(
+                self.job_name,
+                architecture=architecture,
+                **copy.deepcopy(buildah_build_yaml),
+            )
+            build_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
+            build_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
+            build_job.variables[
+                "BUILDAH_EXTRA_ARGS"
+            ] += f" {' '.join(buildah_extra_args)}"
+            build_job.variables["BUILD_PATH"] = self.build_path
 
+            self.workflow.add_job(build_job)
         self.compose_workflow()
 
         return self.workflow
+
+
+def generate_base_container_workflow(singularity_version, s3cmd_version, architectures):
+    logger.info("Generating base container jobs")
+    singularitah = Singularitah(
+        name="singularitah",
+        singularity_version=singularity_version,
+        s3cmd_version=s3cmd_version,
+        build_path="singularitah",
+    )
+    builder = Spacktainerizer(
+        name="builder", build_path="builder", architectures=architectures
+    )
+    runtime = Spacktainerizer(
+        name="runtime", build_path="runtime", architectures=architectures
+    )
+    workflow = singularitah.generate()
+    workflow += builder.generate()
+    workflow += runtime.generate()
+
+    return workflow

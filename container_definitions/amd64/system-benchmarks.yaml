@@ -1,0 +1,7 @@
+spack:
+  specs:
+    - osu-micro-benchmarks
+    - ior
+  packages:
+    osu-micro-benchmarks:
+      require: "@6.2"

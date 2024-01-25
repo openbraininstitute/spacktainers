@@ -1,0 +1,3 @@
+spack:
+  specs:
+    - neurodamus-hippocampus+coreneuron+caliper

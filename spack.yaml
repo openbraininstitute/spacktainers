@@ -1,0 +1,51 @@
+spack:
+  specs:
+  packages:
+    morpho-kit:
+      require: "@0.3.4:"
+    mpfr:
+      require: "@4.1.0:"
+    all:
+      require: "%BASE_ARCH%"
+      providers:
+        mpi: [mpich]
+  concretizer:
+    unify: false
+    reuse: false
+    targets:
+      granularity: generic
+  config:
+    install_tree:
+      root: /opt/we-will-build/the-packages/in-the-cache-builder/with-a-very-long-path/to-avoid-problems/in-the-future
+    build_jobs: 4
+  view: false
+  mirrors:
+    bbpS3_upload: SPACK_BUILD_CACHE_BUCKET
+  gitlab-ci:
+    before_script:
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+      ssh://git@bbpgitlab.epfl.ch/
+    - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf git@bbpgitlab.epfl.ch:'
+    - . $SPACK_ROOT/share/spack/setup-env.sh
+    - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
+    - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
+    script:
+    - pushd ${SPACK_CONCRETE_ENV_DIR} && spack env activate --without-view . && popd
+    - spack -d ci rebuild
+    mappings:
+    - match:
+      - "%BASE_ARCH%"
+      runner-attributes:
+        tags: []
+        image:
+          name: "bbpgitlab.epfl.ch:5050/hpc/spacktainerizer/${BASE_OS}/builder:latest"
+          entrypoint: ['']
+          pull_policy: always
+    service-job-attributes:
+      image: "bbpgitlab.epfl.ch:5050/hpc/spacktainerizer/${BASE_OS}/builder:latest"
+      before_script:
+      - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/
+      - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf git@bbpgitlab.epfl.ch:'
+      - . $SPACK_ROOT/share/spack/setup-env.sh
+      - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
+      - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"

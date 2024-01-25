@@ -31,8 +31,10 @@ This repository aims to be the one-stop shop for all of our container needs.
 ## CI/CD Variables
 
 * `AWS_CACHE_ACCESS_KEY_ID` / `AWS_CACHE_SECRET_ACCESS_KEY`: AWS keypair for accessing the cache bucket hosted by Amazon
+* `BBP_CACHE_ACCESS_KEY_ID` / `BBP_CACHE_SECRET_ACCESS_KEY`: AWS keypair for accessing the cache bucket hosted by BBP
 * `SPACK_DEPLOYMENT_KEY_PUBLIC`: the Spack public deployment key (as a file!)
 * `DOCKERHUB_USER` / `DOCKERHUB_PASSWORD`: credentials for docker hub
+* `GITLAB_API_TOKEN`: private (!) gitlab token with API_READ access (CI_JOB_TOKEN does not have enough permissions). Change this once I'm gone
 
 ## Base containers
 
