@@ -16,6 +16,13 @@ architecture_map = {
                 "secret_key": "BBP_CACHE_SECRET_ACCESS_KEY",
             },
         },
+        "containers_bucket": {
+            "name": "sboinfrastructureassets",
+            "keypair_variables": {
+                "access_key": "AWS_INFRASTRUCTURE_ACCESS_KEY_ID",
+                "secret_key": "AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY",
+            },
+        },
         "base_arch": "%gcc@12.3.0 os=ubuntu22.04 target=x86_64_v3",
         "variables": {
             "KUBERNETES_CPU_REQUEST": 4,
@@ -33,6 +40,13 @@ architecture_map = {
             "keypair_variables": {
                 "access_key": "AWS_CACHE_ACCESS_KEY_ID",
                 "secret_key": "AWS_CACHE_SECRET_ACCESS_KEY",
+            },
+        },
+        "containers_bucket": {
+            "name": "sboinfrastructureassets",
+            "keypair_variables": {
+                "access_key": "AWS_INFRASTRUCTURE_ACCESS_KEY_ID",
+                "secret_key": "AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY",
             },
         },
         "base_arch": "%gcc@12.3.0 os=ubuntu22.04 target=armv8.2a",

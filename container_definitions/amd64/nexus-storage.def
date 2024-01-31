@@ -1,0 +1,5 @@
+Bootstrap: docker
+From: bluebrain/nexus-storage:latest
+
+%startscript
+   /opt/docker/bin/storage $@

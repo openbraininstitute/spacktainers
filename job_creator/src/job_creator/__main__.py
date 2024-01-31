@@ -1,3 +1,4 @@
+import copy
 import glob
 import logging
 import logging.config
@@ -8,11 +9,15 @@ from natsort import natsorted
 
 from job_creator.architectures import architecture_map
 from job_creator.ci_objects import Job, Trigger, Workflow
-from job_creator.containers import generate_base_container_workflow
-from job_creator.job_templates import clean_cache_yaml
+from job_creator.containers import (Spacktainerizer,
+                                    generate_base_container_workflow,
+                                    generate_spack_containers_workflow)
+from job_creator.job_templates import (clean_cache_yaml,
+                                       generate_containers_workflow_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
 from job_creator.packages import generate_packages_workflow
-from job_creator.utils import load_yaml, write_yaml
+from job_creator.utils import (get_arch_or_multiarch_job, get_architectures,
+                               load_yaml, write_yaml)
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("job_creator")
@@ -21,6 +26,27 @@ logger = logging.getLogger("job_creator")
 @click.group()
 def jc():
     pass
+
+
+@jc.command
+@click.option(
+    "--architecture",
+    "-a",
+    help="Architecture to generate spackah pipeline for",
+)
+@click.option(
+    "--out-dir",
+    "-o",
+    help="Which directory to write the spackah build pipeline to",
+)
+def generate_spackah_workflow(architecture, out_dir):
+    """
+    Generate the workflow that will build the actual spack-package-based containers
+    for the given container definition
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    workflow = generate_spack_containers_workflow(architecture, out_dir)
+    write_yaml(workflow.to_dict(), f"{out_dir}/spackah_pipeline.yaml")
 
 
 @jc.command
@@ -39,7 +65,9 @@ def process_spack_pipeline(pipeline_file, out_dir):
         the stages can grab them from within the same workflow
       * configure "stage" dependencies
     """
-    print("Processing spack pipeline")
+    logger.info(
+        "Processing spack pipeline for pipeline file {pipeline_file} with output dir {out_dir}"
+    )
     architecture = out_dir.split(".")[1]
     pipeline = load_yaml(pipeline_file)
 
@@ -74,11 +102,10 @@ def process_spack_pipeline(pipeline_file, out_dir):
 
     build_workflow = Workflow()
 
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
 
     collect_job = "collect artifacts"
-    job = Job(
+    collect_job = Job(
         collect_job,
         architecture,
         needs=[
@@ -95,7 +122,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
         stage="run spack-generated pipelines",
         artifacts={"when": "always", "paths": ["*.yaml", "artifacts.*"]},
     )
-    build_workflow.add_job(job)
+    build_workflow.add_job(collect_job)
 
     previous_stage = None
     for stage, stage_pipeline in natsorted(split_pipelines.items()):
@@ -104,7 +131,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
             pipeline_file = f"{out_dir}/pipeline-{stage}.yaml"
             needs = [
                 {
-                    "job": f"{collect_job} for {architecture}",
+                    "job": collect_job.name,
                     "artifacts": True,
                 },
             ]
@@ -120,7 +147,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
                     "include": [
                         {
                             "artifact": pipeline_file,
-                            "job": f"{collect_job} for {architecture}",
+                            "job": collect_job.name,
                         }
                     ],
                     "strategy": "depend",
@@ -132,6 +159,32 @@ def process_spack_pipeline(pipeline_file, out_dir):
             write_yaml(stage_pipeline, pipeline_file)
 
     write_yaml(build_workflow.to_dict(), "spack_pipeline.yaml")
+
+
+def generate_containers_workflow(existing_workflow, architectures):
+    """
+    Generate the jobs to build the spackah containers
+    """
+    builder = Spacktainerizer(name="builder", build_path="builder")
+
+    workflow = Workflow()
+    for architecture in architectures:
+        arch_job = Job(
+            "generate spackah jobs",
+            force_needs=True,
+            **copy.deepcopy(generate_containers_workflow_yaml),
+            architecture=architecture,
+        )
+        arch_job.image = {"name": f"{builder.registry_image}:{builder.registry_image_tag}",
+                          "pull_policy": "always"}
+        arch_job.needs.extend(
+            [j.name for j in get_arch_or_multiarch_job(existing_workflow, architecture)]
+        )
+        arch_job.variables["ARCHITECTURE"] = architecture
+        arch_job.variables["OUTPUT_DIR"] = f"artifacts.{architecture}"
+
+        workflow.add_job(arch_job)
+    return workflow
 
 
 def generate_clean_cache_workflow(architectures):
@@ -146,7 +199,7 @@ def generate_clean_cache_workflow(architectures):
             "clean build cache",
             architecture=architecture,
             stage=stage,
-            **clean_cache_yaml,
+            **copy.deepcopy(clean_cache_yaml),
         )
 
         bucket_info = architecture_map[architecture]["cache_bucket"]
@@ -178,29 +231,24 @@ def generate_clean_cache_workflow(architectures):
     help="Which file to write the output to",
 )
 def create_jobs(singularity_version, s3cmd_version, output_file):
-    architectures = [
-        os.path.basename(archdir) for archdir in glob.glob("container_definitions/*")
-    ]
-
+    architectures = get_architectures()
     workflow = generate_base_container_workflow(
         singularity_version, s3cmd_version, architectures=architectures
     )
     workflow += generate_packages_workflow(architectures)
     workflow += generate_clean_cache_workflow(architectures)
+    workflow += generate_containers_workflow(workflow, architectures)
 
-    logger.debug("Merging packages workflow")
     for job in [
-        j for j in workflow.jobs if "generate build cache population" in j.name
+        j
+        for j in workflow.jobs
+        if "generate build cache population" in j.name or "generate spackah" in j.name
     ]:
-        multiarch_job_name = "create multiarch for builder"
-        builder_job_names = {
-            architecture: f"build builder for {architecture}"
-            for architecture in architectures
-        }
-        if multiarch_job_name in workflow:
-            job.needs.append(multiarch_job_name)
-        elif builder_job_names[job.architecture] in workflow:
-            job.needs.append(builder_job_names[job.architecture])
+        logger.debug(f"Adding needs for {job.name}")
+        [
+            job.add_need(need.name)
+            for need in get_arch_or_multiarch_job(workflow, job.architecture)
+        ]
 
     # TODO
     # * rules?

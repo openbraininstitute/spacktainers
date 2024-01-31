@@ -5,18 +5,27 @@ import json
 import logging
 import logging.config
 import os
+import shlex
 import shutil
 import subprocess
 from datetime import datetime
 from functools import cached_property
+from typing import Dict, List
 
+import boto3
+from botocore.exceptions import ClientError
 from git import Repo
 
-from job_creator.architectures import architecture_map
+from job_creator.architectures import architecture_map, prod
 from job_creator.ci_objects import Job, Workflow
-from job_creator.job_templates import (buildah_build_yaml,
-                                       buildah_include_yaml, multiarch_yaml)
+from job_creator.job_templates import (bbp_containerizer_include_yaml,
+                                       build_custom_containers_yaml,
+                                       build_spackah_yaml, buildah_build_yaml,
+                                       buildah_include_yaml, create_sif_yaml,
+                                       multiarch_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
+from job_creator.spack_template import spack_template
+from job_creator.utils import load_yaml, merge_dicts, write_yaml
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("job_creator")
@@ -27,6 +36,10 @@ class ImageNotFoundError(Exception):
 
 
 class BaseContainer:
+    """
+    Base class with common container functionality
+    """
+
     def __init__(
         self,
         name,
@@ -38,7 +51,6 @@ class BaseContainer:
         self.job_name = f"build {self.name}"
         self.registry = registry
         self.registry_image = f"{os.environ.get('CI_REGISTRY_IMAGE')}/{build_path}"
-        self._container_checksum = None
         self.build_path = build_path
 
         if isinstance(architectures, str):
@@ -46,28 +58,45 @@ class BaseContainer:
         else:
             self.architectures = list(architectures)
 
-        self.architecture_jobs = {
-            architecture: f"build {self.name} for {architecture}"
-            for architecture in self.architectures
-        }
-
-        self.registry_image_tag = datetime.strftime(datetime.today(), "%Y.%m.%d")
-        if os.environ.get("CI_COMMIT_BRANCH") != os.environ.get("CI_DEFAULT_BRANCH"):
-            self.registry_image_tag += f"-{os.environ.get('CI_COMMIT_BRANCH')}"
-
         self.workflow = Workflow(**copy.deepcopy(buildah_include_yaml))
 
-    def generate(self):
+    @property
+    def registry_image_tag(self) -> str:
+        """
+        The tag the container will have once created: at least the date,
+        optionally followed by the branch name if not building on CI_DEFAULT_BRANCH
+        """
+        if os.environ.get("CI_COMMIT_BRANCH") == os.environ.get("CI_DEFAULT_BRANCH"):
+            tag = "latest"
+        else:
+            tag = datetime.strftime(datetime.today(), "%Y.%m.%d")
+            tag += f"-{os.environ.get('CI_COMMIT_BRANCH')}"
+
+        return tag
+
+    def generate(self, *args, **kwargs) -> Workflow:
+        """
+        The method which will generate a workflow to build this container
+        """
         raise NotImplementedError("Children must implement this")
 
-    def needs_build(self):
+    def needs_build(self) -> bool:
+        """
+        Does the container need building?
+        """
         raise NotImplementedError("Children must implement this")
 
     @cached_property
-    def container_checksum(self):
+    def container_checksum(self) -> str:
+        """
+        Checksum calculated based on the files needed to build the container (e.g. Dockerfile)
+        """
         return self._generate_container_checksum()
 
-    def _generate_container_checksum(self):
+    def _generate_container_checksum(self) -> str:
+        """
+        Checksum calculated based on the files needed to build the container (e.g. Dockerfile)
+        """
         checksums = []
         for filepath in sorted(glob.glob(f"{self.build_path}/*")):
             with open(filepath, "r") as fp:
@@ -75,7 +104,11 @@ class BaseContainer:
         container_checksum = hashlib.sha256(":".join(checksums).encode()).hexdigest()
         return container_checksum
 
-    def inspect_image(self):
+    @cached_property
+    def container_info(self) -> Dict:
+        """
+        Get the container info from the repository through `skopeo inspect`
+        """
         ci_registry = os.environ.get("CI_REGISTRY")
         skopeo_login_cmd = [
             "skopeo",
@@ -103,28 +136,22 @@ class BaseContainer:
                 raise ImageNotFoundError(
                     f"Image {self.name}:{self.registry_image_tag} not found in {ci_registry}"
                 )
-            container_info = json.loads(result.stdout)
+            info = json.loads(result.stdout)
 
             # if the override-arch is not found, skopeo just returns whatever other arch
             # is available without complaining. Thanks, skopeo!
-            if container_info["Architecture"] != architecture:
+            if info["Architecture"] != architecture:
                 raise ImageNotFoundError(
                     f"Image {self.name}:{self.registry_image_tag} with architecture {architecture} not found in {ci_registry}"
                 )
 
-        return container_info
+        return info
 
-    def update_before_script(self, job_name, lines):
+    def compose_workflow(self) -> None:
         """
-        :param job_name: which job to update
-        :param lines: which lines to add
+        Append architecture to the REGISTRY_IMAGE_TAG if necessary
+        and create multiarch job if necessary
         """
-        if "before_script" in self.workflow[job_name]:
-            self.workflow[job_name]["before_script"].extend(lines)
-        else:
-            self.workflow[job_name]["before_script"] = lines
-
-    def compose_workflow(self):
         if len(self.architectures) > 1:
             for job in self.workflow.jobs:
                 job.variables[
@@ -133,7 +160,10 @@ class BaseContainer:
 
         self.create_multiarch_job()
 
-    def create_multiarch_job(self):
+    def create_multiarch_job(self) -> None:
+        """
+        If the container is being built for multiple architectures, create a multiarch job
+        """
         if len(self.architectures) > 1:
             multiarch_job_name = f"create multiarch for {self.name}"
             multiarch_job = Job(multiarch_job_name, **copy.deepcopy(multiarch_yaml))
@@ -146,44 +176,66 @@ class BaseContainer:
 
             self.workflow.add_job(multiarch_job)
 
+    def get_s3_connection(self, bucket: Dict) -> boto3.client:
+        if keypair_variables := bucket.get("keypair_variables"):
+            os.environ["AWS_ACCESS_KEY_ID"] = os.environ[
+                keypair_variables["access_key"]
+            ]
+            os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ[
+                keypair_variables["secret_key"]
+            ]
+
+        s3 = boto3.client("s3")
+
+        return s3
+
 
 class Spacktainerizer(BaseContainer):
+    """
+    Base class for the runtime and builder containers that contain our Spack fork
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._spack_commit = None
 
-    @property
-    def spack_commit(self):
-        if not self._spack_commit:
-            logger.debug(f"Cloning spack for {self.name}")
-            spack_clone_dir = "spack"
-            if os.path.exists(spack_clone_dir):
-                shutil.rmtree(spack_clone_dir)
-            spack = Repo.clone_from(
-                "https://github.com/bluebrain/spack",
-                to_path=spack_clone_dir,
-                multi_options=["-b develop", "--depth=1"],
-            )
-            self._spack_commit = spack.head.commit.hexsha
+    @cached_property
+    def spack_commit(self) -> str:
+        """
+        Get the latest spack commit
+        """
+        logger.debug(f"Cloning spack for {self.name}")
+        spack_clone_dir = "spack"
+        if os.path.exists(spack_clone_dir):
+            shutil.rmtree(spack_clone_dir)
+        spack = Repo.clone_from(
+            "https://github.com/bluebrain/spack",
+            to_path=spack_clone_dir,
+            multi_options=["-b develop", "--depth=1"],
+        )
+        return spack.head.commit.hexsha
 
-        return self._spack_commit
+    def needs_build(self) -> bool:
+        """
+        Check whether the container needs building:
+          * Does the container exist?
+          * Have any of the files needed for it (e.g. Dockerfile) changed?
+          * Was the existing container built with the most recent spack commit?
+        """
 
-    def needs_build(self):
         logger.info(f"Checking whether we need to build {self.name}")
         try:
-            container_info = self.inspect_image()
+            existing_spack_commit = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.spack_commit"
+            ]
+            existing_container_checksum = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.container_checksum"
+            ]
         except ImageNotFoundError as ex:
             logger.info(ex)
             logger.info(f"We'll have to build {self.name}")
             return True
         logger.debug("Image found!")
 
-        existing_spack_commit = container_info["Labels"][
-            "ch.epfl.bbpgitlab.spack_commit"
-        ]
-        existing_container_checksum = container_info["Labels"][
-            "ch.epfl.bbpgitlab.container_checksum"
-        ]
         logger.debug(f"Existing container checksum: {existing_container_checksum}")
         logger.debug(f"My container checksum: {self.container_checksum}")
         logger.debug(f"Existing spack commit: {existing_spack_commit}")
@@ -198,7 +250,10 @@ class Spacktainerizer(BaseContainer):
         logger.info(f"We'll have to build {self.name}")
         return True
 
-    def generate(self):
+    def generate(self, *args, **kwargs) -> Workflow:
+        """
+        Generate the workflow that will build this container, if necessary
+        """
         if not self.needs_build():
             return Workflow()
 
@@ -242,30 +297,39 @@ class Spacktainerizer(BaseContainer):
 
 
 class Singularitah(BaseContainer):
+    """
+    A container containing singularity and s3cmd
+    """
+
     def __init__(self, singularity_version, s3cmd_version, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.singularity_version = singularity_version
         self.s3cmd_version = s3cmd_version
 
     def needs_build(self) -> bool:
+        """
+        Check whether the container needs building:
+          * Does it exist?
+          * Does it have the correct s3cmd and singularity versions?
+          * Has the Dockerfile or any of the related files changed?
+        """
         logger.info(f"Checking whether we need to build {self.name}")
         try:
-            container_info = self.inspect_image()
+            existing_singularity_version = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.singularity_version"
+            ]
+            existing_s3cmd_version = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.s3cmd_version"
+            ]
+            existing_container_checksum = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.container_checksum"
+            ]
         except ImageNotFoundError as ex:
             logger.info(ex)
             logger.info(f"We'll have to build {self.name}")
             return True
         logger.debug(f"Image {self.name} found")
 
-        existing_singularity_version = container_info["Labels"][
-            "ch.epfl.bbpgitlab.singularity_version"
-        ]
-        existing_s3cmd_version = container_info["Labels"][
-            "ch.epfl.bbpgitlab.s3cmd_version"
-        ]
-        existing_container_checksum = container_info["Labels"][
-            "ch.epfl.bbpgitlab.container_checksum"
-        ]
         if (
             existing_container_checksum == self.container_checksum
             and existing_s3cmd_version == self.s3cmd_version
@@ -277,7 +341,10 @@ class Singularitah(BaseContainer):
         logger.info(f"We'll have to build {self.name}")
         return True
 
-    def generate(self) -> Workflow:
+    def generate(self, *args, **kwargs) -> Workflow:
+        """
+        Generate the workflow that will build this container, if necessary
+        """
         if not self.needs_build():
             return Workflow()
 
@@ -309,13 +376,457 @@ class Singularitah(BaseContainer):
         return self.workflow
 
 
-def generate_base_container_workflow(singularity_version, s3cmd_version, architectures):
+class Spackah(BaseContainer):
+    """
+    A container built based on one or more Spack specs.
+    """
+
+    def __init__(
+        self,
+        name,
+        architecture,
+        out_dir,
+        registry="bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/",
+    ):
+        self.name = name
+        self.architectures = [architecture]
+        self.architecture = architecture
+        self.registry = registry
+        self.registry_image = f"{os.environ.get('CI_REGISTRY_IMAGE')}/{name}"
+        self.container_definition_file = (
+            f"container_definitions/{self.architecture}/{self.name}.yaml"
+        )
+        self.container_yaml = load_yaml(self.container_definition_file)
+
+        includes = merge_dicts(
+            copy.deepcopy(buildah_include_yaml),
+            copy.deepcopy(bbp_containerizer_include_yaml),
+        )
+        self.workflow = Workflow(**includes)
+
+        self.spack_env_dir = f"{out_dir}/{self.architecture}/{self.name}"
+        os.makedirs(self.spack_env_dir, exist_ok=True)
+
+        self._generate_spack_yaml()
+        self.concretize_spec()
+
+    def concretize_spec(self) -> None:
+        """
+        Concretize the full container spec with Spack
+        Will set the spack_lock property
+        """
+        spack_root = os.environ["SPACK_ROOT"]
+        spack_cmd = shlex.split(
+            f"bash -c 'source {spack_root}/share/spack/setup-env.sh && "
+            f"spack env activate {self.spack_env_dir} && spack concretize -f'",
+        )
+        result = subprocess.run(spack_cmd)
+        if result.returncode != 0:
+            stdout = result.stdout.decode() if result.stdout else ""
+            stderr = result.stderr.decode() if result.stderr else ""
+            raise RuntimeError(
+                f"Failed to concretize spec for {self.name}:\n{stdout}\n{stderr}"
+            )
+
+        self.spack_lock = os.sep.join([self.spack_env_dir, "spack.lock"])
+
+    def _generate_container_checksum(self) -> str:
+        """
+        Calculate the checksum of the container definition file
+        """
+        with open(
+            f"container_definitions/{self.architecture}/{self.name}.yaml", "r"
+        ) as fp:
+            container_checksum = hashlib.sha256(fp.read().encode()).hexdigest()
+
+        return container_checksum
+
+    def _generate_spack_yaml(self) -> None:
+        """
+        Merges the container definition with the Spack yaml template
+        """
+        spack_yaml = copy.deepcopy(spack_template)
+        merge_dicts(spack_yaml, self.container_yaml)
+        write_yaml(spack_yaml, f"{self.spack_env_dir}/spack.yaml")
+
+    def get_main_package(self) -> str:
+        """
+        Determine the main package for this container (first in the spec list)
+        """
+        main_spec = self.container_yaml["spack"]["specs"][0]
+        main_package = main_spec.split("~")[0].split("+")[0].strip()
+        return main_package
+
+    def get_package_version(self, package_name: str) -> str:
+        """
+        Get the version of a package present in the spack lockfile
+        """
+        with open(self.spack_lock, "r") as fp:
+            spack_lock = json.load(fp)
+
+        logger.debug(f"Looking for package {package_name}")
+        logger.debug(f"Roots: {spack_lock['roots']}")
+        spack_hash = next(
+            root
+            for root in spack_lock["roots"]
+            if root["spec"].split("~")[0].split("+")[0] == package_name
+        )["hash"]
+        package_version = spack_lock["concrete_specs"][spack_hash]["version"]
+
+        return package_version
+
+    @property
+    def registry_image_tag(self) -> str:
+        """
+        The tag the container will have once created
+        main package version followed by architecture,
+        if not building on main also insert the CI_COMMIT_REF_SLUG
+        """
+        main_package_version = self.get_package_version(self.get_main_package())
+        if prod:
+            tag = f"{main_package_version}__{self.architecture}"
+        else:
+            ci_commit_ref_slug = os.environ.get("CI_COMMIT_REF_SLUG")
+            tag = f"{main_package_version}__{ci_commit_ref_slug}__{self.architecture}"
+
+        return tag
+
+    def _create_build_job(self) -> Job:
+        """
+        Create the job that will build the container image
+        """
+        build_job = Job(
+            f"build {self.name} container",
+            architecture=self.architecture,
+            needs=[
+                {
+                    "pipeline": os.environ.get("CI_PIPELINE_ID"),
+                    "job": f"generate spackah jobs for {self.architecture}",
+                    "artifacts": True,
+                },
+            ],
+            **copy.deepcopy(build_spackah_yaml),
+        )
+
+        buildah_extra_args = [
+            f"--label org.opencontainers.image.title={self.name}",
+            f"--label org.opencontainers.image.version={self.registry_image_tag}",
+            f"--label ch.epfl.bbpgitlab.spack_lock_sha256={self.spack_lock_checksum}",
+            f"--label ch.epfl.bbpgitlab.container_checksum={self.container_checksum}",
+        ]
+
+        build_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
+        build_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
+        build_job.variables["SPACK_ENV_DIR"] = self.spack_env_dir
+        build_job.variables["ARCH"] = self.architecture
+        build_job.variables["BUILD_PATH"] = "spackah"
+        build_job.variables["BUILDAH_EXTRA_ARGS"] += f" {' '.join(buildah_extra_args)}"
+
+        return build_job
+
+    def _create_sif_job(self, build_job, singularity_image_tag) -> Job:
+        """
+        Create the job that will build and upload the SIF image
+        """
+        create_sif_job = Job(
+            f"create {self.name} sif file",
+            architecture=self.architecture,
+            bucket="infra",
+            **copy.deepcopy(create_sif_yaml),
+        )
+        if build_job:
+            create_sif_job.needs.append(build_job.name)
+
+        bucket = architecture_map[self.architecture]["containers_bucket"]
+        fs_container_path = f"/tmp/{self.container_filename}"
+
+        create_sif_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
+        create_sif_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
+        create_sif_job.variables["FS_CONTAINER_PATH"] = fs_container_path
+        create_sif_job.variables["CONTAINER_NAME"] = self.name
+        create_sif_job.variables["SPACK_LOCK_SHA256"] = self.spack_lock_checksum
+        create_sif_job.variables["CONTAINER_CHECKSUM"] = self.container_checksum
+        create_sif_job.variables["BUCKET"] = bucket["name"]
+        create_sif_job.variables[
+            "S3_CONTAINER_PATH"
+        ] = f"s3://{bucket['name']}/containers/spacktainerizah/{self.container_filename}"
+
+        create_sif_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:{singularity_image_tag}"
+        create_sif_job.configure_s3cmd()
+
+        return create_sif_job
+
+    def generate(self, singularity_image_tag: str) -> str:
+        """
+        Generate the workflow that will build this container, if necessary
+        """
+
+        build_job = None
+
+        if self.needs_build():
+            build_job = self._create_build_job()
+            self.workflow.add_job(build_job)
+
+        if self.needs_upload():
+            create_sif_job = self._create_sif_job(build_job, singularity_image_tag)
+            self.workflow.add_job(create_sif_job)
+
+        logger.info(f"Workflow stages for {self.name}: {self.workflow.stages}")
+        return self.workflow
+
+    @cached_property
+    def spack_lock_checksum(self) -> str:
+        """
+        Calculate the sha256sum of the spack.lock file for this container
+        """
+        with open(self.spack_lock, "r") as fp:
+            checksum = hashlib.sha256(fp.read().encode()).hexdigest()
+
+        return checksum
+
+    @property
+    def container_filename(self) -> str:
+        """
+        SIF filename for the container in the S3 bucket
+        """
+        return f"{self.name}__{self.registry_image_tag}.sif"
+
+    def needs_upload(self) -> bool:
+        """
+        Check whether the container needs to be uploaded as a SIF file
+        """
+        bucket = architecture_map[self.architecture]["containers_bucket"]
+        s3 = self.get_s3_connection(bucket)
+        try:
+            object_info = s3.head_object(
+                Bucket=bucket["name"],
+                Key=f"containers/spacktainerizah/{self.container_filename}",
+            )
+            bucket_container_checksum = object_info["ResponseMetadata"][
+                "HTTPHeaders"
+            ].get("x-amz-meta-container-checksum", "container checksum not set")
+            bucket_spack_sha256 = object_info["ResponseMetadata"]["HTTPHeaders"].get(
+                "x-amz-meta-spack-lock-sha256", "container spack lock sha256 not set"
+            )
+        except ClientError:
+            logger.debug(f"No SIF file found for {self.name}")
+            return True
+
+        if (
+            bucket_container_checksum != self.container_checksum
+            or bucket_spack_sha256 != self.spack_lock_checksum
+        ):
+            logger.debug(
+                f"Rebuild SIF for checksum mismatch: {bucket_container_checksum}/{self.container_checksum} or {bucket_spack_sha256}/{self.spack_lock_checksum}"
+            )
+            return True
+
+        return False
+
+    def needs_build(self) -> bool:
+        """
+        Check whether the container needs building:
+        * Check whether the container exists
+        * Check its container_checksum
+        * Check its spack_sha265
+        """
+        try:
+            existing_container_checksum = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.container_checksum"
+            ]
+            existing_spack_lock_checksum = self.container_info["Labels"][
+                "ch.epfl.bbpgitlab.spack_lock_sha256"
+            ]
+        except ImageNotFoundError as ex:
+            logger.info(ex)
+            logger.info(f"Image not found - we'll have to build {self.name}")
+            return True
+
+        logger.debug(f"existing spack.lock checksum: {existing_spack_lock_checksum}")
+        logger.debug(f"my spack.lock checksum: {self.spack_lock_checksum}")
+
+        if (
+            existing_container_checksum == self.container_checksum
+            and existing_spack_lock_checksum == self.spack_lock_checksum
+        ):
+            logger.info(f"No need to build {self.name}")
+            return False
+
+        logger.info(f"We'll have to build {self.name}")
+        return True
+
+    def compose_workflow(self):
+        raise NotImplementedError("Not applicable for Spackah containers")
+
+    def create_multiarch_job(self):
+        raise NotImplementedError("Not applicable for Spackah containers")
+
+
+class CustomContainer(BaseContainer):
+    """
+    Custom containers are containers which are not built by us, but which already exist on
+    docker hub. Write a singularity definition file and place it under the desired architecture,
+    giving it the name you want your container to have.
+    """
+
+    def __init__(
+        self,
+        name,
+        architecture,
+    ):
+        self.name = name
+        self.architecture = architecture
+        self.architectures = [self.architecture]
+
+    @cached_property
+    def definition(self) -> List[str]:
+        """
+        Read the definition file and return the content as a list of lines
+        """
+        with open(
+            f"container_definitions/{self.architecture}/{self.name}.def", "r"
+        ) as fp:
+            return fp.readlines()
+
+    def get_source(self) -> tuple[str, str]:
+        """
+        Read the definition file and return the image and tag of the source container image
+        """
+        from_line = next(
+            line for line in self.definition if line.lower().startswith("from:")
+        )
+        _, image, tag = [x.strip() for x in from_line.split(":")]
+
+        return image, tag
+
+    @property
+    def registry_image_tag(self) -> str:
+        """
+        Determine the tag the container will have in the registry
+        In this case, it is taken straight from the source container
+        """
+        _, version = self.get_source()
+        if prod:
+            tag = f"{version}__{self.architecture}"
+        else:
+            ci_commit_ref_slug = os.environ.get("CI_COMMIT_REF_SLUG")
+            tag = f"{version}__{ci_commit_ref_slug}__{self.architecture}"
+
+        return tag
+
+    @cached_property
+    def source_container_checksum(self) -> str:
+        return self.read_source_container_checksum()
+
+    def read_source_container_checksum(self) -> str:
+        """
+        Inspect the container we're converting to SIF and get its checksum
+        """
+        source_image, source_version = self.get_source()
+        skopeo_inspect_cmd = [
+            "skopeo",
+            "inspect",
+            f"--override-arch={self.architecture}",
+            f"docker://{source_image}:{source_version}",
+        ]
+        logger.debug(f"Running `{skopeo_inspect_cmd}`")
+        result = subprocess.run(skopeo_inspect_cmd, capture_output=True)
+
+        if result.returncode != 0:
+            raise ImageNotFoundError(
+                f"Issue with skopeo command: {result.stderr.decode()}"
+            )
+        info = json.loads(result.stdout)
+        container_checksum = info["Digest"].split(":")[-1]
+        return container_checksum
+
+    @property
+    def container_filename(self) -> str:
+        """
+        SIF filename for the container in the S3 bucket
+        """
+        return f"{self.name}__{self.registry_image_tag}.sif"
+
+    def needs_build(self) -> bool:
+        """
+        Check whether the container needs building:
+        1. Does the container exist in the bucket?
+        2. Compare digest from source with bucket container
+
+        # TODO if necessary, this can probably be refined to a per-job level
+               instead of the whole chain
+        """
+        bucket = architecture_map[self.architecture]["containers_bucket"]
+        s3 = self.get_s3_connection(bucket)
+        try:
+            object_info = s3.head_object(
+                Bucket=bucket["name"],
+                Key=f"containers/spacktainerizah/{self.container_filename}",
+            )
+            bucket_checksum = object_info["ResponseMetadata"]["HTTPHeaders"][
+                "x-amz-meta-digest"
+            ]
+            if bucket_checksum != self.source_container_checksum:
+                logger.debug(
+                    f"{self.name}: local: {self.source_container_checksum}, bucket: {bucket_checksum}"
+                )
+                return True
+        except ClientError:
+            logger.debug(f"No container found for {self.name}")
+            return True
+
+        return False
+
+    def generate(self, singularity_image_tag: str) -> Workflow:
+        """
+        Generate the workflow that will build this container, if necessary
+        """
+        workflow = Workflow()
+        if self.needs_build():
+            build_job = Job(
+                f"build sif file for {self.name}",
+                force_needs=True,
+                architecture=self.architecture,
+                bucket="infra",
+                **copy.deepcopy(build_custom_containers_yaml),
+            )
+
+            bucket_name = architecture_map[self.architecture]["containers_bucket"][
+                "name"
+            ]
+            build_job.variables["CONTAINER_FILENAME"] = self.container_filename
+            build_job.variables[
+                "CONTAINER_DEFINITION"
+            ] = f"container_definitions/{self.architecture}/{self.name}.def"
+            build_job.variables["SOURCE_DIGEST"] = self.source_container_checksum
+            build_job.variables[
+                "S3_CONTAINER_PATH"
+            ] = f"s3://{bucket_name}/containers/spacktainerizah/{self.container_filename}"
+            build_job.configure_s3cmd()
+            build_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:{singularity_image_tag}"
+
+            workflow.add_job(build_job)
+
+        return workflow
+
+
+def generate_base_container_workflow(
+    singularity_version: str, s3cmd_version: str, architectures: List[str]
+) -> Workflow:
+    """
+    Generate the workflow that will build the base containers (builder, runtime, singularitah)
+
+    :param singularity_version: which version of singularity to install in the singularitah container
+    :param s3cmd_version: which version of s3cmd to install in the singularitah container
+    :param architectures: which architectures to build for ([amd64, arm64])
+    """
     logger.info("Generating base container jobs")
     singularitah = Singularitah(
         name="singularitah",
         singularity_version=singularity_version,
         s3cmd_version=s3cmd_version,
         build_path="singularitah",
+        architectures=architectures,
     )
     builder = Spacktainerizer(
         name="builder", build_path="builder", architectures=architectures
@@ -327,4 +838,65 @@ def generate_base_container_workflow(singularity_version, s3cmd_version, archite
     workflow += builder.generate()
     workflow += runtime.generate()
 
+    return workflow
+
+
+def generate_spack_containers_workflow(architecture: str, out_dir: str) -> Workflow:
+    """
+    Generate the workflow that will build the actual spack-based containers
+
+    :param architecture: which architecture to generate the workflow for (amd64, arm64)
+    :param out_dir: which directory to put the output into
+    """
+    workflow = Workflow()
+    builder = Spacktainerizer(
+        name="builder", build_path="builder", architectures=[architecture]
+    )
+    for container_path in glob.glob(f"container_definitions/{architecture}/*yaml"):
+        container_name = os.path.splitext(os.path.basename(container_path))[0]
+        logger.info(
+            f"Generating workflow for container {container_name} on {architecture}"
+        )
+
+        singularitah = Singularitah(
+            name="singularitah",
+            singularity_version="",
+            s3cmd_version="",
+            build_path="singularitah",
+            architectures=[architecture],
+        )
+        logger.info(f"Generating job for {container_name}")
+        container = Spackah(
+            name=container_name, architecture=architecture, out_dir=out_dir
+        )
+        container_workflow = container.generate(singularitah.registry_image_tag)
+        logger.debug(
+            f"Container {container_name} workflow jobs are {container_workflow.jobs}"
+        )
+        workflow += container_workflow
+
+    for custom_container_path in glob.glob(
+        f"container_definitions/{architecture}/*def"
+    ):
+        custom_container_name = os.path.splitext(
+            os.path.basename(custom_container_path)
+        )[0]
+        logger.info(
+            f"Generating workflow for custom container {custom_container_name} on {architecture}"
+        )
+        custom = CustomContainer(custom_container_name, architecture)
+        custom_workflow = custom.generate(singularitah.registry_image_tag)
+        logger.debug(
+            f"Container {custom_container_name} workflow jobs are {custom_workflow.jobs}"
+        )
+        workflow += custom_workflow
+
+    logger.debug(f"Workflow jobs are {workflow.jobs}")
+    if not workflow.jobs:
+        workflow.add_job(
+            Job(
+                name="No containers to rebuild",
+                script="echo No containers to rebuild",
+            )
+        )
     return workflow

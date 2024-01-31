@@ -1,6 +1,8 @@
 import copy
 import logging
 import logging.config
+import os
+import urllib
 
 from job_creator.architectures import architecture_map
 from job_creator.logging_config import LOGGING_CONFIG
@@ -24,6 +26,10 @@ class Workflow:
         self.jobs = []
         self.include = include if include else []
 
+    def add_include(self, include):
+        if include not in self.include:
+            self.include.append(include)
+
     def add_stage(self, stage):
         if stage not in self.stages:
             self.stages.append(stage)
@@ -35,14 +41,31 @@ class Workflow:
         self.jobs.append(joblike)
         if joblike.stage:
             self.add_stage(joblike.stage)
+
     def add_job(self, job):
         self._add_joblike("job", job)
+
+    def get_job(self, job_name, startswith=False):
+        """
+        Return a job with a given name, if it's present in the workflow
+
+        :param startswith: if set to True, return a list of jobs whose names start with the given string
+        """
+
+        retval = None
+
+        if startswith:
+            retval = [job for job in self.jobs if job.name.startswith(job_name)]
+        else:
+            retval = [job for job in self.jobs if job.name == job_name]
+
+        return retval
 
     def add_trigger(self, trigger):
         self._add_joblike("trigger", trigger)
 
     def to_dict(self):
-        as_dict = {"stages": self.stages}
+        as_dict = {"stages": self.stages} if self.stages else {}
         as_dict.update({job.name: job.to_dict() for job in self.jobs})
         if self.include:
             as_dict["include"] = self.include
@@ -83,10 +106,12 @@ class Workflow:
         if not isinstance(other, Workflow):
             raise TypeError(f"cannot add Workflow and {type(other)}")
 
-        self.stages.extend(other.stages)
+        for stage in other.stages:
+            self.add_stage(stage)
         for other_job in other.jobs:
             self.add_job(other_job)
-        self.include.extend(other.include)
+        for other_include in other.include:
+            self.add_include(other_include)
 
         return self
 
@@ -101,6 +126,7 @@ class Job:
     def __init__(
         self,
         name,
+        force_needs=False,
         architecture=None,
         needs=None,
         script=None,
@@ -108,8 +134,14 @@ class Job:
         artifacts=None,
         before_script=None,
         variables=None,
+        bucket="cache",
         **kwargs,
     ):
+        """
+        :param bucket: set to either "cache" to use the cache bucket,
+                       or "infra" to use the infra bucket
+        """
+        self.force_needs = force_needs
         self.extra_properties = []
         self.name = name
         self.tags = []
@@ -120,6 +152,7 @@ class Job:
         self.before_script = before_script if before_script else []
         self.variables = variables if variables else {}
         self.image = None
+        self._bucket = bucket
         for key, value in kwargs.items():
             logger.debug(f"Setting {key}: {value}")
             self.extra_properties.append(key)
@@ -144,6 +177,45 @@ class Job:
                 "unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY"
             )
 
+    def configure_s3cmd(self):
+        """
+        * determine proxy
+        * determine access keys
+        """
+        if not self.architecture:
+            raise NoArchitecture(
+                f"Cannot configure s3cmd - no architecture specified for {self.name}"
+            )
+
+        script_lines = []
+        if architecture_map[self.architecture].get("proxy", False):
+            proxy = urllib.parse.urlsplit(os.environ["HTTP_PROXY"])
+            proxy_host = proxy.hostname
+            proxy_port = proxy.port
+            script_lines += [
+                f"sed -i 's/^proxy_host.*/proxy_host={proxy_host}/' /root/.s3cfg",
+                f"sed -i 's/^proxy_port.*/proxy_port={proxy_port}/' /root/.s3cfg",
+            ]
+
+        if bucket_keypair := architecture_map[self.architecture][self.bucket_key].get(
+            "keypair_variables"
+        ):
+            script_lines += [
+                f"sed -i 's/^access_key.*/access_key='${bucket_keypair['access_key']}'/' /root/.s3cfg",
+                f"sed -i 's/^secret_key.*/secret_key='${bucket_keypair['secret_key']}'/' /root/.s3cfg",
+            ]
+
+        self.update_before_script(script_lines, append=True)
+
+    @property
+    def bucket_key(self):
+        if self._bucket == "cache":
+            return "cache_bucket"
+        elif self._bucket == "infra":
+            return "containers_bucket"
+        else:
+            raise ValueError(f"Don't know what to do with bucket {self._bucket}")
+
     def set_aws_variables(self):
         if not self.architecture:
             raise NoArchitecture(
@@ -151,7 +223,8 @@ class Job:
             )
 
         script_lines = []
-        if bucket_keypair := architecture_map[self.architecture]["cache_bucket"].get(
+
+        if bucket_keypair := architecture_map[self.architecture][self.bucket_key].get(
             "keypair_variables"
         ):
             script_lines = [
@@ -160,12 +233,16 @@ class Job:
             ]
         else:
             logger.info(f"No keypair defined for {self.architecture}")
-        if endpoint_url := architecture_map[self.architecture]["cache_bucket"].get(
+        if endpoint_url := architecture_map[self.architecture][self.bucket_key].get(
             "endpoint_url"
         ):
             script_lines.append(f"export S3_ENDPOINT_URL={endpoint_url}")
 
         self.update_before_script(script_lines)
+
+    def add_need(self, need):
+        if need not in self.needs:
+            self.needs.append(need)
 
     def update_before_script(self, lines, append=False):
         """
@@ -185,6 +262,8 @@ class Job:
         if hasattr(self, prop_name) and getattr(self, prop_name):
             return {prop_name: getattr(self, prop_name)}
         else:
+            if prop_name == "needs" and self.force_needs:
+                return {"needs": []}
             return {}
 
     def add_spack_mirror(self):
@@ -218,7 +297,6 @@ class Job:
             "tags",
             "before_script",
             "variables",
-            "needs",
             "image",
         ] + self.extra_properties:
             as_dict.update(self._property_as_dict(prop_name))

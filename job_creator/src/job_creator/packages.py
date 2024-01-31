@@ -163,7 +163,7 @@ def generate_packages_workflow(architectures):
         packages_job.needs.append(
             {
                 "pipeline": os.environ.get("CI_PIPELINE_ID"),
-                "job": "generate pipeline",
+                "job": "generate base pipeline",
                 "artifacts": True,
             }
         )

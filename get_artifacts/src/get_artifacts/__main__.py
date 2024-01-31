@@ -86,9 +86,9 @@ def get_artifacts(parent_pipeline, private_token):
     logger.info("Finding bridge jobs")
     bridges = session.get(bridges_url(base_url, project_id, parent_pipeline)).json()
     logger.debug(f"Bridges: {pformat(bridges)}")
-    bridge = next(bridge for bridge in bridges if bridge["name"] == "run pipeline")
+    bridge = next(bridge for bridge in bridges if bridge["name"] == "base containers and pipeline generation")
     logger.debug(f"Bridge: {pformat(bridge)}")
-    logger.info("Finding run pipeline")
+    logger.info("Finding base containers and pipeline generation")
     run_pipeline = session.get(
         pipeline_url(
             base_url,
@@ -97,7 +97,7 @@ def get_artifacts(parent_pipeline, private_token):
         )
     ).json()
     logger.debug(f"Run pipeline: {pformat(run_pipeline)}")
-    logger.info("Getting jobs from run pipeline")
+    logger.info("Getting jobs from base containers and pipeline generation")
     jobs = session.get(jobs_url(base_url, project_id, run_pipeline["id"])).json()
     logger.debug(f"Jobs: {pformat(jobs)}")
     for architecture in [
@@ -107,10 +107,18 @@ def get_artifacts(parent_pipeline, private_token):
         process_job = next(
             j for j in jobs if j["name"] == f"process spack pipeline for {architecture}"
         )
-        artifacts = session.get(artifacts_url(base_url, project_id, process_job["id"]))
-        logger.info(f"Downloading artifacts for {architecture}")
-        with open(f"artifacts.{architecture}.zip", "wb") as fp:
-            fp.write(artifacts.content)
+        spack_artifacts = session.get(artifacts_url(base_url, project_id, process_job["id"]))
+        logger.info(f"Downloading spack artifacts for {architecture}")
+        with open(f"spack.artifacts.{architecture}.zip", "wb") as fp:
+            fp.write(spack_artifacts.content)
+
+        spackah_job = next(
+            j for j in jobs if j["name"] == f"generate spackah jobs for {architecture}"
+        )
+        spackah_artifacts = session.get(artifacts_url(base_url, project_id, spackah_job["id"]))
+        logger.info(f"Downloading spackah artifacts for {architecture}")
+        with open(f"spackah.artifacts.{architecture}.zip", "wb") as fp:
+            fp.write(spackah_artifacts.content)
 
 
 if __name__ == "__main__":
