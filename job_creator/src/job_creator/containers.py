@@ -19,14 +19,17 @@ from git import Repo
 
 from job_creator.architectures import architecture_map, prod
 from job_creator.ci_objects import Job, Workflow
-from job_creator.job_templates import (bbp_containerizer_include_yaml,
+from job_creator.job_templates import (bb5_download_sif_yaml,
+                                       bbp_containerizer_include_yaml,
                                        build_custom_containers_yaml,
                                        build_spackah_yaml, buildah_build_yaml,
                                        buildah_include_yaml, create_sif_yaml,
-                                       multiarch_yaml)
+                                       docker_hub_push_yaml, multiarch_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
 from job_creator.spack_template import spack_template
-from job_creator.utils import load_yaml, merge_dicts, write_yaml
+from job_creator.utils import (docker_hub_login, docker_hub_repo_exists,
+                               docker_hub_repo_tag_exists, load_yaml,
+                               merge_dicts, write_yaml)
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("job_creator")
@@ -105,20 +108,34 @@ class BaseContainer:
         container_checksum = hashlib.sha256(":".join(checksums).encode()).hexdigest()
         return container_checksum
 
-    @cached_property
-    def container_info(self) -> Dict:
+    def container_info(
+        self,
+        registry: str | None = None,
+        registry_user: str | None = None,
+        registry_password: str | None = None,
+        registry_image: str | None = None,
+    ) -> Dict:
         """
         Get the container info from the repository through `skopeo inspect`
         """
-        ci_registry = os.environ.get("CI_REGISTRY")
+        registry = registry if registry else os.environ.get("CI_REGISTRY")
+        registry_user = (
+            registry_user if registry_user else os.environ.get("CI_REGISTRY_USER")
+        )
+        registry_password = (
+            registry_password
+            if registry_password
+            else os.environ.get("CI_REGISTRY_PASSWORD")
+        )
+        registry_image = registry_image if registry_image else self.registry_image
         skopeo_login_cmd = [
             "skopeo",
             "login",
             "-u",
-            os.environ.get("CI_REGISTRY_USER"),
+            registry_user,
             "-p",
-            os.environ.get("CI_REGISTRY_PASSWORD"),
-            os.environ.get("CI_REGISTRY"),
+            registry_password,
+            registry,
         ]
         logger.debug(f"Running `{skopeo_login_cmd}`")
         subprocess.run(skopeo_login_cmd)
@@ -128,14 +145,14 @@ class BaseContainer:
                 "skopeo",
                 "inspect",
                 f"--override-arch={architecture}",
-                f"docker://{self.registry_image}:{self.registry_image_tag}",
+                f"docker://{registry_image}:{self.registry_image_tag}",
             ]
             logger.debug(f"Running `{skopeo_inspect_cmd}`")
             result = subprocess.run(skopeo_inspect_cmd, capture_output=True)
 
             if result.returncode != 0:
                 raise ImageNotFoundError(
-                    f"Image {self.name}:{self.registry_image_tag} not found in {ci_registry}"
+                    f"Image {self.name}:{self.registry_image_tag} not found in {registry}"
                 )
             info = json.loads(result.stdout)
 
@@ -143,7 +160,7 @@ class BaseContainer:
             # is available without complaining. Thanks, skopeo!
             if info["Architecture"] != architecture:
                 raise ImageNotFoundError(
-                    f"Image {self.name}:{self.registry_image_tag} with architecture {architecture} not found in {ci_registry}"
+                    f"Image {self.name}:{self.registry_image_tag} with architecture {architecture} not found in {registry}"
                 )
 
         return info
@@ -226,10 +243,11 @@ class Spacktainerizer(BaseContainer):
 
         logger.info(f"Checking whether we need to build {self.name}")
         try:
-            existing_spack_commit = self.container_info["Labels"][
+            container_info = self.container_info()
+            existing_spack_commit = container_info["Labels"][
                 "ch.epfl.bbpgitlab.spack_commit"
             ]
-            existing_container_checksum = self.container_info["Labels"][
+            existing_container_checksum = container_info["Labels"][
                 "ch.epfl.bbpgitlab.container_checksum"
             ]
         except ImageNotFoundError as ex:
@@ -318,13 +336,14 @@ class Singularitah(BaseContainer):
         """
         logger.info(f"Checking whether we need to build {self.name}")
         try:
-            existing_singularity_version = self.container_info["Labels"][
+            container_info = self.container_info()
+            existing_singularity_version = container_info["Labels"][
                 "ch.epfl.bbpgitlab.singularity_version"
             ]
-            existing_s3cmd_version = self.container_info["Labels"][
+            existing_s3cmd_version = container_info["Labels"][
                 "ch.epfl.bbpgitlab.s3cmd_version"
             ]
-            existing_container_checksum = self.container_info["Labels"][
+            existing_container_checksum = container_info["Labels"][
                 "ch.epfl.bbpgitlab.container_checksum"
             ]
         except ImageNotFoundError as ex:
@@ -527,7 +546,7 @@ class Spackah(BaseContainer):
 
         return build_job
 
-    def _create_sif_job(self, build_job, singularity_image_tag) -> Job:
+    def _create_sif_job(self, build_job: Job | None, singularity_image_tag: str) -> Job:
         """
         Create the job that will build and upload the SIF image
         """
@@ -559,20 +578,68 @@ class Spackah(BaseContainer):
 
         return create_sif_job
 
-    def generate(self, singularity_image_tag: str) -> str:
+    def _create_docker_hub_push_job(self, build_job: Job | None) -> Job:
+        """
+        Create the job that will push the container image to docker hub
+        """
+        job = Job(
+            f"push {self.name}:{self.registry_image_tag} to docker hub",
+            **copy.deepcopy(docker_hub_push_yaml),
+        )
+        job.variables["CONTAINER_NAME"] = self.name
+        job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
+        job.variables["HUB_REPO_NAME"] = f"spackah-{self.name}"
+        if build_job:
+            job.needs.append(build_job.name)
+
+        return job
+
+    def _create_bb5_download_sif_job(
+        self, create_sif_job: Job | None, s3cmd_version: str
+    ):
+        job = Job(
+            f"download {self.name} SIF to bb5", **copy.deepcopy(bb5_download_sif_yaml)
+        )
+        sif_root = Path("/gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainerizah")
+        sif_file = sif_root / self.container_filename
+        job.variables["BUCKET"] = architecture_map[self.architecture][
+            "containers_bucket"
+        ]["name"]
+        job.variables["SIF_FILENAME"] = self.container_filename
+        job.variables["FULL_SIF_PATH"] = str(sif_file)
+        job.variables["SPACK_LOCK_CHECKSUM"] = self.spack_lock_checksum
+        job.variables["CONTAINER_CHECKSUM"] = self.container_checksum
+        job.variables["S3CMD_VERSION"] = s3cmd_version
+        if create_sif_job:
+            job.needs.append(create_sif_job.name)
+        return job
+
+    def generate(self, singularity_image_tag: str, s3cmd_version: str) -> str:
         """
         Generate the workflow that will build this container, if necessary
         """
 
         build_job = None
+        create_sif_job = None
 
         if self.needs_build():
             build_job = self._create_build_job()
             self.workflow.add_job(build_job)
 
-        if self.needs_upload():
+        if self.needs_sif_upload():
             create_sif_job = self._create_sif_job(build_job, singularity_image_tag)
             self.workflow.add_job(create_sif_job)
+
+        if self.architecture == "amd64":
+            logger.info("We want the amd64 containers on bb5")
+            bb5_download_sif_job = self._create_bb5_download_sif_job(
+                create_sif_job, s3cmd_version
+            )
+            self.workflow.add_job(bb5_download_sif_job)
+
+        if self.needs_docker_hub_push():
+            docker_hub_push_job = self._create_docker_hub_push_job(build_job)
+            self.workflow.add_job(docker_hub_push_job)
 
         logger.info(f"Workflow stages for {self.name}: {self.workflow.stages}")
         return self.workflow
@@ -594,7 +661,69 @@ class Spackah(BaseContainer):
         """
         return f"{self.name}__{self.registry_image_tag}.sif"
 
-    def needs_upload(self) -> bool:
+    def needs_docker_hub_push(self) -> bool:
+        """
+        Check whether the container needs to be pushed to Docker Hub
+        * repository exists
+        * tag not present
+        * checksums mismatch
+        """
+        hub_namespace = "bluebrain"
+        hub_repo = f"spackah-{self.name}"
+        if os.environ.get("CI_COMMIT_BRANCH") != os.environ.get("CI_DEFAULT_BRANCH"):
+            logger.info("Not on default branch, no need to push to docker hub")
+            return False
+
+        docker_hub_user = os.environ["DOCKERHUB_USER"]
+        docker_hub_auth_token = os.environ["DOCKERHUB_PASSWORD"]
+        dh = docker_hub_login(docker_hub_user, docker_hub_auth_token)
+        if not docker_hub_repo_exists(dh, hub_namespace, hub_repo):
+            logger.info(
+                f"Docker Hub repository {hub_namespace}/{hub_repo} does not exist - no need to push"
+            )
+            return False
+        if not docker_hub_repo_tag_exists(
+            dh, hub_namespace, hub_repo, self.registry_image_tag
+        ):
+            logger.info(
+                f"Tag {self.registry_image_tag} does not exist in Docker Hub repo {hub_namespace}/{hub_repo} - we'll have to push"
+            )
+            return True
+
+        container_info = self.container_info(
+            "hub.docker.com",
+            docker_hub_user,
+            docker_hub_auth_token,
+            f"{hub_namespace}/{hub_repo}",
+        )
+        repo_spack_lock_checksum = container_info["Labels"][
+            "ch.epfl.bbpgitlab.spack_lock_sha256"
+        ]
+        repo_container_checksum = container_info["Labels"][
+            "ch.epfl.bbpgitlab.container_checksum"
+        ]
+
+        logger.debug(f"existing spack.lock checksum: {existing_spack_lock_checksum}")
+        logger.debug(f"my spack.lock checksum: {self.spack_lock_checksum}")
+
+        logger.debug(f"existing container checksum: {repo_container_checksum}")
+        logger.debug(f"my container checksum: {self.container_checksum}")
+
+        if (
+            existing_container_checksum == self.container_checksum
+            and existing_spack_lock_checksum == self.spack_lock_checksum
+        ):
+            logger.info(
+                f"No need to push {self.name}:{self.registry_image_tag} to docker hub"
+            )
+            return False
+
+        logger.info(
+            f"We'll have to push {self.name}:{self.registry_image_tag} to docker hub"
+        )
+        return True
+
+    def needs_sif_upload(self) -> bool:
         """
         Check whether the container needs to be uploaded as a SIF file
         """
@@ -634,10 +763,11 @@ class Spackah(BaseContainer):
         * Check its spack_sha265
         """
         try:
-            existing_container_checksum = self.container_info["Labels"][
+            container_info = self.container_info()
+            existing_container_checksum = container_info["Labels"][
                 "ch.epfl.bbpgitlab.container_checksum"
             ]
-            existing_spack_lock_checksum = self.container_info["Labels"][
+            existing_spack_lock_checksum = container_info["Labels"][
                 "ch.epfl.bbpgitlab.spack_lock_sha256"
             ]
         except ImageNotFoundError as ex:
@@ -844,7 +974,9 @@ def generate_base_container_workflow(
     return workflow
 
 
-def generate_spack_containers_workflow(architecture: str, out_dir: Path) -> Workflow:
+def generate_spack_containers_workflow(
+    architecture: str, out_dir: Path, s3cmd_version: str
+) -> Workflow:
     """
     Generate the workflow that will build the actual spack-based containers
 
@@ -872,7 +1004,9 @@ def generate_spack_containers_workflow(architecture: str, out_dir: Path) -> Work
         container = Spackah(
             name=container_name, architecture=architecture, out_dir=out_dir
         )
-        container_workflow = container.generate(singularitah.registry_image_tag)
+        container_workflow = container.generate(
+            singularitah.registry_image_tag, s3cmd_version
+        )
         logger.debug(
             f"Container {container_name} workflow jobs are {container_workflow.jobs}"
         )

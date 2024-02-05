@@ -10,6 +10,7 @@ dependencies = [
     "click",
     "gitpython",
     "natsort",
+    "requests",
     "ruamel.yaml"
 ]
 

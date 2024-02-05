@@ -40,14 +40,15 @@ def jc():
     "-o",
     help="Which directory to write the spackah build pipeline to",
 )
-def generate_spackah_workflow(architecture, out_dir):
+@click.option("--s3cmd-version", "-s", default="2.3.0", help="s3cmd version")
+def generate_spackah_workflow(architecture, out_dir, s3cmd_version):
     """
     Generate the workflow that will build the actual spack-package-based containers
     for the given container definition
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    workflow = generate_spack_containers_workflow(architecture, out_dir)
+    workflow = generate_spack_containers_workflow(architecture, out_dir, s3cmd_version)
     write_yaml(workflow.to_dict(), f"{out_dir}/spackah_pipeline.yaml")
 
 
@@ -164,7 +165,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
     write_yaml(build_workflow.to_dict(), "spack_pipeline.yaml")
 
 
-def generate_containers_workflow(existing_workflow, architectures):
+def generate_containers_workflow(existing_workflow, architectures, s3cmd_version):
     """
     Generate the jobs to build the spackah containers
     """
@@ -187,6 +188,7 @@ def generate_containers_workflow(existing_workflow, architectures):
         )
         arch_job.variables["ARCHITECTURE"] = architecture
         arch_job.variables["OUTPUT_DIR"] = f"artifacts.{architecture}"
+        arch_job.variables["S3CMD_VERSION"] = s3cmd_version
 
         workflow.add_job(arch_job)
     return workflow
@@ -242,7 +244,7 @@ def create_jobs(singularity_version, s3cmd_version, output_file):
     )
     workflow += generate_packages_workflow(architectures)
     workflow += generate_clean_cache_workflow(architectures)
-    workflow += generate_containers_workflow(workflow, architectures)
+    workflow += generate_containers_workflow(workflow, architectures, s3cmd_version)
 
     for job in [
         j

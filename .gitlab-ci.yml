@@ -126,7 +126,7 @@ test spackitor:
         path: coverage.xml
 
 
-cleanup deleted branch containers:
+cleanup deleted branch containers from the bucket:
   stage: cleanup
   image: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:latest
   rules:
@@ -134,7 +134,6 @@ cleanup deleted branch containers:
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   before_script:
-    - apk add git
     - sed -i 's/^access_key.*/access_key='${AWS_INFRASTRUCTURE_ACCESS_KEY_ID}'/' /root/.s3cfg
     - sed -i 's/^secret_key.*/secret_key='${AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY}'/' /root/.s3cfg
     - let length=$(($(echo $(expr index ${HTTP_PROXY:7} :)) - 1))
@@ -157,6 +156,36 @@ cleanup deleted branch containers:
     -     if [[ ! " ${branches[*]} " =~ " ${container_branch} " ]]; then
     -         echo "${container_branch} not found in existing branches"
     -         s3cmd rm ${container}
+    -     else
+    -         echo "The branch still exists, it can stay"
+    -     fi
+    - done
+
+cleanup deleted branch containers from bb5:
+  stage: cleanup
+  tags: [bb5_map]
+  variables:
+    CONTAINER_ROOT: /gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainerizah
+  # TODO: rules
+  # rules:
+  #   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  #     when: never
+  #   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - module load unstable git
+    - git fetch
+    - git branch -r | sed 's|origin/||'
+    - branches=($(git branch -r | sed 's|origin/||' | awk '{print $NF}'))
+    - echo "Existing branches are ${branches[*]}"
+    - for container in $(ls ${CONTAINER_ROOT}); do
+    -     container_branch=$(echo $container | awk -F'__' '{print $3}')
+    -     if [[ -z "${container_branch}" ]] || [[ ${container_branch} == *.sif ]] ; then
+    -         echo "no branch for ${container} - skipping"
+    -     fi
+    -     echo "Container ${container} was built with branch ${container_branch}"
+    -     if [[ ! " ${branches[*]} " =~ " ${container_branch} " ]]; then
+    -         echo "${container_branch} not found in existing branches"
+    -         rm -f ${CONTAINER_ROOT}/${container}.sif
     -     else
     -         echo "The branch still exists, it can stay"
     -     fi

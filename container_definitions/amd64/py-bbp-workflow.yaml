@@ -1,6 +1,0 @@
-spack:
-  specs:
-    - py-bbp-workflow
-    - rsync
-    - openssh
-    - ffmpeg
