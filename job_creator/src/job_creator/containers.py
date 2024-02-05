@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from functools import cached_property
+from pathlib import Path
 from typing import Dict, List
 
 import boto3
@@ -197,20 +198,21 @@ class Spacktainerizer(BaseContainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.spack_branch = os.environ.get("SPACK_BRANCH", "develop")
 
     @cached_property
     def spack_commit(self) -> str:
         """
         Get the latest spack commit
         """
-        logger.debug(f"Cloning spack for {self.name}")
+        logger.debug(f"Cloning spack for {self.name} {self.spack_branch}")
         spack_clone_dir = "spack"
         if os.path.exists(spack_clone_dir):
             shutil.rmtree(spack_clone_dir)
         spack = Repo.clone_from(
             "https://github.com/bluebrain/spack",
             to_path=spack_clone_dir,
-            multi_options=["-b develop", "--depth=1"],
+            multi_options=[f"-b {self.spack_branch}", "--depth=1"],
         )
         return spack.head.commit.hexsha
 
@@ -258,6 +260,7 @@ class Spacktainerizer(BaseContainer):
             return Workflow()
 
         buildah_extra_args = [
+            f"--build-arg SPACK_BRANCH={self.spack_branch}",
             f'--label org.opencontainers.image.title="{self.name}"',
             f'--label org.opencontainers.image.version="{self.registry_image_tag}"',
             f'--label ch.epfl.bbpgitlab.spack_commit="{self.spack_commit}"',
@@ -404,8 +407,8 @@ class Spackah(BaseContainer):
         )
         self.workflow = Workflow(**includes)
 
-        self.spack_env_dir = f"{out_dir}/{self.architecture}/{self.name}"
-        os.makedirs(self.spack_env_dir, exist_ok=True)
+        self.spack_env_dir = out_dir / self.architecture / self.name
+        self.spack_env_dir.mkdir(parents=True, exist_ok=True)
 
         self._generate_spack_yaml()
         self.concretize_spec()
@@ -428,7 +431,7 @@ class Spackah(BaseContainer):
                 f"Failed to concretize spec for {self.name}:\n{stdout}\n{stderr}"
             )
 
-        self.spack_lock = os.sep.join([self.spack_env_dir, "spack.lock"])
+        self.spack_lock = self.spack_env_dir / "spack.lock"
 
     def _generate_container_checksum(self) -> str:
         """
@@ -447,7 +450,7 @@ class Spackah(BaseContainer):
         """
         spack_yaml = copy.deepcopy(spack_template)
         merge_dicts(spack_yaml, self.container_yaml)
-        write_yaml(spack_yaml, f"{self.spack_env_dir}/spack.yaml")
+        write_yaml(spack_yaml, self.spack_env_dir / "spack.yaml")
 
     def get_main_package(self) -> str:
         """
@@ -517,7 +520,7 @@ class Spackah(BaseContainer):
 
         build_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
         build_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
-        build_job.variables["SPACK_ENV_DIR"] = self.spack_env_dir
+        build_job.variables["SPACK_ENV_DIR"] = str(self.spack_env_dir)
         build_job.variables["ARCH"] = self.architecture
         build_job.variables["BUILD_PATH"] = "spackah"
         build_job.variables["BUILDAH_EXTRA_ARGS"] += f" {' '.join(buildah_extra_args)}"
@@ -841,7 +844,7 @@ def generate_base_container_workflow(
     return workflow
 
 
-def generate_spack_containers_workflow(architecture: str, out_dir: str) -> Workflow:
+def generate_spack_containers_workflow(architecture: str, out_dir: Path) -> Workflow:
     """
     Generate the workflow that will build the actual spack-based containers
 

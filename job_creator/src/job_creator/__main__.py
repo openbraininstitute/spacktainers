@@ -3,6 +3,7 @@ import glob
 import logging
 import logging.config
 import os
+from pathlib import Path
 
 import click
 from natsort import natsorted
@@ -44,7 +45,8 @@ def generate_spackah_workflow(architecture, out_dir):
     Generate the workflow that will build the actual spack-package-based containers
     for the given container definition
     """
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     workflow = generate_spack_containers_workflow(architecture, out_dir)
     write_yaml(workflow.to_dict(), f"{out_dir}/spackah_pipeline.yaml")
 
@@ -81,7 +83,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
     for name, item in pipeline.items():
         if name == "variables" and "variables" in architecture_map[architecture]:
             item.update(architecture_map[architecture]["variables"])
-        if name in ["stages", "variables"]:
+        if name in ["stages", "variables", "workflow"]:
             continue
         item.pop("needs", None)
         stage = item.pop("stage", "no stage")
@@ -89,6 +91,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
 
         job.add_spack_mirror()
         job.set_aws_variables()
+        job.timeout = "4h"
 
         job.image["pull_policy"] = "always"
         job.needs = [
@@ -175,8 +178,10 @@ def generate_containers_workflow(existing_workflow, architectures):
             **copy.deepcopy(generate_containers_workflow_yaml),
             architecture=architecture,
         )
-        arch_job.image = {"name": f"{builder.registry_image}:{builder.registry_image_tag}",
-                          "pull_policy": "always"}
+        arch_job.image = {
+            "name": f"{builder.registry_image}:{builder.registry_image_tag}",
+            "pull_policy": "always",
+        }
         arch_job.needs.extend(
             [j.name for j in get_arch_or_multiarch_job(existing_workflow, architecture)]
         )

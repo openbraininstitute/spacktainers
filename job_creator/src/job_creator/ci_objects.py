@@ -134,6 +134,7 @@ class Job:
         artifacts=None,
         before_script=None,
         variables=None,
+        timeout=None,
         bucket="cache",
         **kwargs,
     ):
@@ -151,6 +152,7 @@ class Job:
         self.artifacts = artifacts if artifacts else None
         self.before_script = before_script if before_script else []
         self.variables = variables if variables else {}
+        self.timeout = None
         self.image = None
         self._bucket = bucket
         for key, value in kwargs.items():
@@ -298,6 +300,7 @@ class Job:
             "before_script",
             "variables",
             "image",
+            "timeout",
         ] + self.extra_properties:
             as_dict.update(self._property_as_dict(prop_name))
 

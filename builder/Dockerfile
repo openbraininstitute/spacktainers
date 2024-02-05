@@ -1,6 +1,7 @@
 ARG BASE_IMAGE=ubuntu:22.04
 ARG MIRROR_URL=""
 ARG CACHE_BUCKET="s3://spack-build-cache"
+ARG SPACK_BRANCH="develop"
 FROM $BASE_IMAGE as bootstrap
 
 ENV SPACK_ROOT=/opt/spack \
@@ -8,7 +9,7 @@ ENV SPACK_ROOT=/opt/spack \
     container=docker
 
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update \
- && apt-get install -y build-essential curl file gfortran git python3 python3-boto3 rpm unzip
+ && apt-get install -y build-essential curl environment-modules file gfortran git python3 python3-boto3 rpm unzip
 
 # Yes, again. Line 1 by itself is not enough to export this ARG into the shell in RUN
 ARG BASE_IMAGE
@@ -16,6 +17,8 @@ ARG BASE_IMAGE
 ARG MIRROR_URL
 # For AWS S3 bucket
 ARG CACHE_BUCKET
+# Which branch to clone
+ARG SPACK_BRANCH
 
 RUN if [ "$BASE_IMAGE" = "ubuntu:20.04" ]; then echo "Skipping gcc-12 for $BASE_IMAGE"; \
  else export DEBIAN_FRONTEND=noninteractive && apt-get install -y gcc-12 g++-12 gfortran-12; fi
@@ -23,8 +26,9 @@ RUN if [ "$BASE_IMAGE" = "ubuntu:20.04" ]; then echo "Skipping gcc-12 for $BASE_
 
 SHELL ["/bin/bash", "--login", "-c"]
 
+RUN echo "Cloning spack branch $SPACK_BRANCH"
 RUN mkdir $SPACK_ROOT && cd $SPACK_ROOT \
- && git clone --single-branch --branch develop https://github.com/BlueBrain/spack.git . \
+ && git clone --single-branch --branch $SPACK_BRANCH https://github.com/BlueBrain/spack.git . \
  && mkdir -p $SPACK_ROOT/opt/spack
 
 RUN ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
@@ -34,11 +38,10 @@ RUN ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
  && ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
           /usr/local/bin/spack-env
 
-RUN mkdir -p /root/.spack \
- && cp $SPACK_ROOT/share/spack/docker/modules.yaml \
-        /root/.spack/modules.yaml \
+RUN cp $SPACK_ROOT/share/spack/docker/modules.yaml \
+        $SPACK_ROOT/etc/spack/modules.yaml \
  && cp $SPACK_ROOT/bluebrain/sysconfig/containers/packages.yaml \
-        /root/.spack/packages.yaml \
+        $SPACK_ROOT/etc/spack/packages.yaml \
  && rm -rf /root/*.* /run/nologin $SPACK_ROOT/.git
 
 # [WORKAROUND]
@@ -52,23 +55,26 @@ WORKDIR /root
 SHELL ["docker-shell"]
 
 # Creates the package cache
-RUN spack compiler find \
+RUN spack compiler find --scope=site \
  && spack compiler list
 # OpenGL cannot be build by Spack
-RUN spack external find opengl
+RUN spack external find --scope=site opengl
+
+# Possible ARM customizations (require Spack sourced)
+COPY acfl.sh acfl.sh
+RUN ./acfl.sh
 
 # Add in an external ISPC for the Viz team
 RUN cd /opt \
  && curl -L https://github.com/ispc/ispc/releases/download/v1.18.0/ispc-v1.18.0-linux.tar.gz|tar xzf - \
  && rm -rf /opt/ispc-v1.18.0-linux/{examples,css,*.html} \
- && spack external find -p /opt/ispc-v1.18.0-linux ispc
+ && spack external find --scope=site -p /opt/ispc-v1.18.0-linux ispc
 
 # This will list any missing packages that should be installed via apt.
-RUN spack bootstrap status
 RUN spack bootstrap now
 # Add the BBP build cache, this should only allow _read_ access.
 RUN echo "Mirror URL is .${MIRROR_URL}. and CACHE_BUCKET is .${CACHE_BUCKET}."
-RUN if [ -n "${MIRROR_URL}" ]; then spack mirror add --s3-endpoint-url ${MIRROR_URL} bbpS3 ${CACHE_BUCKET}; fi
+RUN if [ -n "${MIRROR_URL}" ]; then spack mirror add --scope=site --s3-endpoint-url ${MIRROR_URL} bbpS3 ${CACHE_BUCKET}; fi
 
 COPY key.pub key.pub
 RUN spack gpg trust key.pub
@@ -85,6 +91,9 @@ ENTRYPOINT ["/bin/bash", "/usr/local/bin/spack-env"]
 # is specified in a manifest file (spack.yaml)
 RUN mkdir /opt/spack-environment
 ONBUILD COPY spack.yaml /opt/spack-environment/spack.yaml
+
+# May be needed for ARM compilers
+ONBUILD RUN . /etc/profile.d/modules.sh
 
 # Set the git token for CI builds
 ONBUILD ARG CI_JOB_TOKEN

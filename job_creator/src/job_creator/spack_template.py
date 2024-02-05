@@ -8,7 +8,7 @@ spack_template = {
             "reuse": False,
             "targets": {"granularity": "generic"},
         },
-        "config": {"install_tree": "/opt/software", "build_jobs": 4},
+        "config": {"install_tree": "/opt/software"},
         "view": "/opt/view",
     }
 }

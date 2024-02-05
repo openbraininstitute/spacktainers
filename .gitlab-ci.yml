@@ -6,6 +6,9 @@ stages:
   - build spackah containers
   - cleanup
 
+variables:
+  SPACK_BRANCH: develop
+
 generate base pipeline:
   image: ubuntu:latest
   stage: generate

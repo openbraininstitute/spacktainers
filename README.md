@@ -43,7 +43,7 @@ While the pipeline is organised in stages, jobs jump the queue wherever they can
     * build the builder, runtime and singularitah containers if necessary. These containers will be built only for the architectures needed for the final containers. These jobs will be generated only for the containers that need to be built.
     * run `spack ci generate` and process its output. This is needed because Gitlab imposes a fairly tight restriction on how large a YAML file can be and Spack can easily surpass that. To work around this, we take the output YAML and split it into multiple pipelines along the generated stages.
     * Clean the build cache buckets
-* `base containers and pipeline generation`: will run the pipeline that was generated int he first step
+* `base containers and pipeline generation`: will run the pipeline that was generated in the first step
 * `gather child artifacts`: will collect the yaml generated in the `base containers and pipeline generation` child pipeline. This is needed because Gitlab doesn't allow triggering artifacts from a child pipeline
 * `populate buildcache for amd64`: run the jobs that `spack ci generate` produced in order to populate the buildcache
 * `build spacktainers for amd64`: this workflow was also generated in the `base containers and pipeline generation` child pipeline and will build the actual containers, if necessary.

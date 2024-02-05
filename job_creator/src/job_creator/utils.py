@@ -74,7 +74,7 @@ def get_architectures():
 
 def get_arch_or_multiarch_job(workflow, architecture, container_name="builder"):
     """
-    Given a workflow and the name of a container (in practise, this will usually be builder),
+    Given a workflow and the name of a container (in practice, this will usually be builder),
     this method will return a list with either the build job or, if applicable, the multiarch job.
     If the container doesn't need to be built, will return an empty list
     """
