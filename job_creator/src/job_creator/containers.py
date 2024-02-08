@@ -22,7 +22,8 @@ from job_creator.ci_objects import Job, Workflow
 from job_creator.job_templates import (bb5_download_sif_yaml,
                                        bbp_containerizer_include_yaml,
                                        build_custom_containers_yaml,
-                                       build_spackah_yaml, buildah_build_yaml,
+                                       build_spacktainer_yaml,
+                                       buildah_build_yaml,
                                        buildah_include_yaml, create_sif_yaml,
                                        docker_hub_push_yaml, multiarch_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
@@ -418,7 +419,10 @@ class Spackah(BaseContainer):
         self.container_definition_file = (
             f"container_definitions/{self.architecture}/{self.name}.yaml"
         )
-        self.container_yaml = load_yaml(self.container_definition_file)
+        self.spacktainer_yaml = load_yaml(self.container_definition_file)
+        self.container_yaml = {"spack": self.spacktainer_yaml.pop("spack")}
+        self.hub_namespace = "bluebrain"
+        self.hub_repo = f"spackah-{self.name}"
 
         includes = merge_dicts(
             copy.deepcopy(buildah_include_yaml),
@@ -506,14 +510,14 @@ class Spackah(BaseContainer):
         """
         main_package_version = self.get_package_version(self.get_main_package())
         if prod:
-            tag = f"{main_package_version}__{self.architecture}"
+            tag = f"{main_package_version}"
         else:
             ci_commit_ref_slug = os.environ.get("CI_COMMIT_REF_SLUG")
-            tag = f"{main_package_version}__{ci_commit_ref_slug}__{self.architecture}"
+            tag = f"{main_package_version}__{ci_commit_ref_slug}"
 
         return tag
 
-    def _create_build_job(self) -> Job:
+    def _create_build_job(self, builder_image_tag: str) -> Job:
         """
         Create the job that will build the container image
         """
@@ -523,11 +527,11 @@ class Spackah(BaseContainer):
             needs=[
                 {
                     "pipeline": os.environ.get("CI_PIPELINE_ID"),
-                    "job": f"generate spackah jobs for {self.architecture}",
+                    "job": f"generate spacktainer jobs for {self.architecture}",
                     "artifacts": True,
                 },
             ],
-            **copy.deepcopy(build_spackah_yaml),
+            **copy.deepcopy(build_spacktainer_yaml),
         )
 
         buildah_extra_args = [
@@ -537,12 +541,38 @@ class Spackah(BaseContainer):
             f"--label ch.epfl.bbpgitlab.container_checksum={self.container_checksum}",
         ]
 
+        build_path = "spacktainer"
+
         build_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
         build_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
         build_job.variables["SPACK_ENV_DIR"] = str(self.spack_env_dir)
         build_job.variables["ARCH"] = self.architecture
-        build_job.variables["BUILD_PATH"] = "spackah"
+        build_job.variables["BUILD_PATH"] = build_path
         build_job.variables["BUILDAH_EXTRA_ARGS"] += f" {' '.join(buildah_extra_args)}"
+
+        dockerfile = Path(f"{build_path}/Dockerfile")
+        dockerfile_lines = [
+            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:{builder_image_tag} AS builder",
+            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/runtime:{builder_image_tag}",
+            "# Triggers building the 'builder' image, otherwise it is optimized away",
+            "COPY --from=builder /etc/debian_version /etc/debian_version",
+        ]
+
+        if self.spacktainer_yaml:
+            for filepair in self.spacktainer_yaml["spacktainer"].get("files"):
+                source, target = filepair.split(":")
+                dockerfile_lines.append(f'"COPY {source} {target}"')
+
+        build_job.update_before_script(
+            f"mkdir -p {dockerfile.parent}",
+        )
+        build_job.update_before_script(
+            [f"echo {line} >> {dockerfile}" for line in dockerfile_lines], append=True
+        )
+        build_job.artifacts = {
+            "when": "always",
+            "paths": ["spacktainer/Dockerfile"],
+        }
 
         return build_job
 
@@ -588,7 +618,8 @@ class Spackah(BaseContainer):
         )
         job.variables["CONTAINER_NAME"] = self.name
         job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
-        job.variables["HUB_REPO_NAME"] = f"spackah-{self.name}"
+        job.variables["HUB_REPO_NAMESPACE"] = self.hub_namespace
+        job.variables["HUB_REPO_NAME"] = self.hub_repo
         if build_job:
             job.needs.append(build_job.name)
 
@@ -614,7 +645,9 @@ class Spackah(BaseContainer):
             job.needs.append(create_sif_job.name)
         return job
 
-    def generate(self, singularity_image_tag: str, s3cmd_version: str) -> str:
+    def generate(
+        self, builder_image_tag: str, singularity_image_tag: str, s3cmd_version: str
+    ) -> Workflow:
         """
         Generate the workflow that will build this container, if necessary
         """
@@ -623,7 +656,7 @@ class Spackah(BaseContainer):
         create_sif_job = None
 
         if self.needs_build():
-            build_job = self._create_build_job()
+            build_job = self._create_build_job(builder_image_tag)
             self.workflow.add_job(build_job)
 
         if self.needs_sif_upload():
@@ -668,8 +701,6 @@ class Spackah(BaseContainer):
         * tag not present
         * checksums mismatch
         """
-        hub_namespace = "bluebrain"
-        hub_repo = f"spackah-{self.name}"
         if os.environ.get("CI_COMMIT_BRANCH") != os.environ.get("CI_DEFAULT_BRANCH"):
             logger.info("Not on default branch, no need to push to docker hub")
             return False
@@ -677,16 +708,16 @@ class Spackah(BaseContainer):
         docker_hub_user = os.environ["DOCKERHUB_USER"]
         docker_hub_auth_token = os.environ["DOCKERHUB_PASSWORD"]
         dh = docker_hub_login(docker_hub_user, docker_hub_auth_token)
-        if not docker_hub_repo_exists(dh, hub_namespace, hub_repo):
+        if not docker_hub_repo_exists(dh, self.hub_namespace, self.hub_repo):
             logger.info(
-                f"Docker Hub repository {hub_namespace}/{hub_repo} does not exist - no need to push"
+                f"Docker Hub repository {self.hub_namespace}/{self.hub_repo} does not exist - no need to push"
             )
             return False
         if not docker_hub_repo_tag_exists(
-            dh, hub_namespace, hub_repo, self.registry_image_tag
+            dh, self.hub_namespace, self.hub_repo, self.registry_image_tag
         ):
             logger.info(
-                f"Tag {self.registry_image_tag} does not exist in Docker Hub repo {hub_namespace}/{hub_repo} - we'll have to push"
+                f"Tag {self.registry_image_tag} does not exist in Docker Hub repo {self.hub_namespace}/{self.hub_repo} - we'll have to push"
             )
             return True
 
@@ -694,7 +725,7 @@ class Spackah(BaseContainer):
             "hub.docker.com",
             docker_hub_user,
             docker_hub_auth_token,
-            f"{hub_namespace}/{hub_repo}",
+            f"{self.hub_namespace}/{self.hub_repo}",
         )
         repo_spack_lock_checksum = container_info["Labels"][
             "ch.epfl.bbpgitlab.spack_lock_sha256"
@@ -1005,7 +1036,7 @@ def generate_spack_containers_workflow(
             name=container_name, architecture=architecture, out_dir=out_dir
         )
         container_workflow = container.generate(
-            singularitah.registry_image_tag, s3cmd_version
+            builder.registry_image_tag, singularitah.registry_image_tag, s3cmd_version
         )
         logger.debug(
             f"Container {container_name} workflow jobs are {container_workflow.jobs}"

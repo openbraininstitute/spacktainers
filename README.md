@@ -15,6 +15,34 @@ The only files you should have to edit as an end-user are located in the `contai
 
 In both cases, the filename will be used as the name of your container. In case of a YAML file, the container version will be derived from the first package in your spec. In case of a def file, the version will be the same as the tag on docker hub.
 
+## Adding extra files to your containers
+
+Create a folder under `spacktainer/files` to hold your container's files. Make sure to use your container's name to keep everything somewhat orderly.
+In your container definition file, add a `spacktainer` section with a `files` key. This key holds a list of `source:target` filepairs (note that there is no space between source and target!)
+Source is specified starting from the level below `spacktainer`; in the example below the folder structure would look like this:
+
+```
+spacktainer/files
+└── my-awesome-container
+    ├── some_folder
+    │   ├── brilliant_hack.patch
+    │   ├── readme.txt
+    │   ├── ugly_hack.patch
+    │   └── useless_but_if_we_delete_it_everything_breaks.jpg
+    └── script.sh
+
+```
+
+```
+spack:
+  specs:
+    - my-awesome-package
+spacktainer:
+  files:
+    - files/my-awesome-container/script.sh:/opt/script.sh
+    - files/my-awesome-container/some_folder:/opt/some_folder
+```
+
 # Developer documentation
 
 ## Components And Their Original Repositories
@@ -79,7 +107,7 @@ Apart from that, folders of note are:
 * container_definitions: this is where users will define their containers
 * runtime: base container that contains everything needed to run the spack-built environment
 * singularitah: base container that contains singularity and s3cmd
-* spackah: contains the Dockerfile that will be used to build the spacktainers
+* spacktainer: contains the Dockerfile that will be used to build the spacky containers
 
 ## job_creator
 

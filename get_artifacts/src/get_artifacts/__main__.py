@@ -86,7 +86,9 @@ def get_artifacts(parent_pipeline, private_token):
     logger.info("Finding bridge jobs")
     bridges = session.get(bridges_url(base_url, project_id, parent_pipeline)).json()
     logger.debug(f"Bridges: {pformat(bridges)}")
-    bridge = next(bridge for bridge in bridges if bridge["name"] == "base containers and pipeline generation")
+    bridge = next(
+        b for b in bridges if b["name"] == "base containers and pipeline generation"
+    )
     logger.debug(f"Bridge: {pformat(bridge)}")
     logger.info("Finding base containers and pipeline generation")
     run_pipeline = session.get(
@@ -107,18 +109,24 @@ def get_artifacts(parent_pipeline, private_token):
         process_job = next(
             j for j in jobs if j["name"] == f"process spack pipeline for {architecture}"
         )
-        spack_artifacts = session.get(artifacts_url(base_url, project_id, process_job["id"]))
+        spack_artifacts = session.get(
+            artifacts_url(base_url, project_id, process_job["id"])
+        )
         logger.info(f"Downloading spack artifacts for {architecture}")
         with open(f"spack.artifacts.{architecture}.zip", "wb") as fp:
             fp.write(spack_artifacts.content)
 
-        spackah_job = next(
-            j for j in jobs if j["name"] == f"generate spackah jobs for {architecture}"
+        spacktainer_job = next(
+            j
+            for j in jobs
+            if j["name"] == f"generate spacktainer jobs for {architecture}"
         )
-        spackah_artifacts = session.get(artifacts_url(base_url, project_id, spackah_job["id"]))
-        logger.info(f"Downloading spackah artifacts for {architecture}")
-        with open(f"spackah.artifacts.{architecture}.zip", "wb") as fp:
-            fp.write(spackah_artifacts.content)
+        spacktainer_artifacts = session.get(
+            artifacts_url(base_url, project_id, spacktainer_job["id"])
+        )
+        logger.info(f"Downloading spacktainer artifacts for {architecture}")
+        with open(f"spacktainer.artifacts.{architecture}.zip", "wb") as fp:
+            fp.write(spacktainer_artifacts.content)
 
 
 if __name__ == "__main__":

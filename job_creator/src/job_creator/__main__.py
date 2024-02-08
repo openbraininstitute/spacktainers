@@ -33,15 +33,15 @@ def jc():
 @click.option(
     "--architecture",
     "-a",
-    help="Architecture to generate spackah pipeline for",
+    help="Architecture to generate spacktainer pipeline for",
 )
 @click.option(
     "--out-dir",
     "-o",
-    help="Which directory to write the spackah build pipeline to",
+    help="Which directory to write the spacktainer build pipeline to",
 )
 @click.option("--s3cmd-version", "-s", default="2.3.0", help="s3cmd version")
-def generate_spackah_workflow(architecture, out_dir, s3cmd_version):
+def generate_spacktainer_workflow(architecture, out_dir, s3cmd_version):
     """
     Generate the workflow that will build the actual spack-package-based containers
     for the given container definition
@@ -49,7 +49,7 @@ def generate_spackah_workflow(architecture, out_dir, s3cmd_version):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     workflow = generate_spack_containers_workflow(architecture, out_dir, s3cmd_version)
-    write_yaml(workflow.to_dict(), f"{out_dir}/spackah_pipeline.yaml")
+    write_yaml(workflow.to_dict(), f"{out_dir}/spacktainer_pipeline.yaml")
 
 
 @jc.command
@@ -167,14 +167,14 @@ def process_spack_pipeline(pipeline_file, out_dir):
 
 def generate_containers_workflow(existing_workflow, architectures, s3cmd_version):
     """
-    Generate the jobs to build the spackah containers
+    Generate the jobs to build the spacktainer containers
     """
     builder = Spacktainerizer(name="builder", build_path="builder")
 
     workflow = Workflow()
     for architecture in architectures:
         arch_job = Job(
-            "generate spackah jobs",
+            "generate spacktainer jobs",
             force_needs=True,
             **copy.deepcopy(generate_containers_workflow_yaml),
             architecture=architecture,
@@ -249,7 +249,7 @@ def create_jobs(singularity_version, s3cmd_version, output_file):
     for job in [
         j
         for j in workflow.jobs
-        if "generate build cache population" in j.name or "generate spackah" in j.name
+        if "generate build cache population" in j.name or "generate spacktainer" in j.name
     ]:
         logger.debug(f"Adding needs for {job.name}")
         [

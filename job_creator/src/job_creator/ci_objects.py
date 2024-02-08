@@ -86,10 +86,12 @@ class Workflow:
             raise TypeError(f"cannot add Workflow and {type(other)}")
 
         new = Workflow()
-        stages = copy.deepcopy(self.stages)
-        stages.extend(copy.deepcopy(other.stages))
-        stages = self._dedup(stages)
-        new.stages = stages
+        my_stages = copy.deepcopy(self.stages)
+        other_stages = copy.deepcopy(other.stages)
+        if set(my_stages).issubset(set(other_stages)):
+            new.stages = other_stages
+        else:
+            new.stages = self._dedup(my_stages + other_stages)
 
         new.jobs = copy.deepcopy(self.jobs)
         for other_job in other.jobs:
@@ -106,8 +108,13 @@ class Workflow:
         if not isinstance(other, Workflow):
             raise TypeError(f"cannot add Workflow and {type(other)}")
 
-        for stage in other.stages:
-            self.add_stage(stage)
+        my_stages = copy.deepcopy(self.stages)
+        other_stages = copy.deepcopy(other.stages)
+        if set(my_stages).issubset(set(other_stages)):
+            self.stages = other_stages
+        else:
+            for stage in other.stages:
+                self.add_stage(stage)
         for other_job in other.jobs:
             self.add_job(other_job)
         for other_include in other.include:
@@ -152,7 +159,7 @@ class Job:
         self.artifacts = artifacts if artifacts else None
         self.before_script = before_script if before_script else []
         self.variables = variables if variables else {}
-        self.timeout = None
+        self.timeout = timeout
         self.image = None
         self._bucket = bucket
         for key, value in kwargs.items():

@@ -3,7 +3,7 @@ stages:
   - generate
   - build base containers
   - build cache
-  - build spackah containers
+  - build spacktainer containers
   - cleanup
 
 variables:
@@ -24,10 +24,10 @@ generate base pipeline:
     when: always
     paths:
       - generated_pipeline.yaml
-      - spackah.yaml
+      - spacktainer.yaml
       - merged_spack*yaml
       - job_creator.log
-      - spackah
+      - spacktainer
 
 base containers and pipeline generation:
   stage: build base containers
@@ -55,7 +55,7 @@ gather child artifacts:
     -    architecture=$(echo ${zipfile##spack.artifacts.} | sed 's/.zip//')
     -    echo ${architecture}=yes >> build.env
     - done
-    - for zipfile in $(ls spackah.artifacts*zip); do
+    - for zipfile in $(ls spacktainer.artifacts*zip); do
     -    unzip ${zipfile} -d ${zipfile%%.zip}
     -    rm -f ${zipfile}
     - done
@@ -64,7 +64,7 @@ gather child artifacts:
     when: always
     paths:
       - spack.artifacts.*
-      - spackah.artifacts.*
+      - spacktainer.artifacts.*
     reports:
       dotenv: build.env
 
@@ -93,14 +93,14 @@ populate buildcache for amd64:
 
 
 build spacktainers for amd64:
-  stage: build spackah containers
+  stage: build spacktainer containers
   needs:
     - job: gather child artifacts
       artifacts: true
     - populate buildcache for amd64
   trigger:
     include:
-      - artifact: spackah.artifacts.amd64/artifacts.amd64/spackah_pipeline.yaml
+      - artifact: spacktainer.artifacts.amd64/artifacts.amd64/spacktainer_pipeline.yaml
         job: gather child artifacts
     strategy: depend
 

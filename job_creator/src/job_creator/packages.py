@@ -40,6 +40,9 @@ def parse_container_definitions(arch):
         specs.extend(container_definition["spack"]["specs"])
         logger.debug(f"Found specs: {container_definition['spack']['specs']}")
         if packages := container_definition["spack"].get("packages"):
+            logger.debug(
+                f"Found package restrictions: {container_definition['spack']['packages']}"
+            )
             merge_dicts(package_restrictions, packages)
 
     return specs, package_restrictions

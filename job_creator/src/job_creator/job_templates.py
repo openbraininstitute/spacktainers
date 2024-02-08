@@ -119,7 +119,7 @@ generate_containers_workflow_yaml = {
         "apt-get update && apt-get install -y ca-certificates git python3 python3-pip skopeo",
         "pip install --upgrade pip setuptools",
         "pip install -e ./job_creator",
-        "jc generate-spackah-workflow -a ${ARCHITECTURE} -o ${OUTPUT_DIR} -s ${S3CMD_VERSION}",
+        "jc generate-spacktainer-workflow -a ${ARCHITECTURE} -o ${OUTPUT_DIR} -s ${S3CMD_VERSION}",
     ],
     "artifacts": {
         "when": "always",
@@ -132,8 +132,8 @@ generate_containers_workflow_yaml = {
     },
 }
 
-build_spackah_yaml = {
-    "stage": "build spackah containers",
+build_spacktainer_yaml = {
+    "stage": "build spacktainer containers",
     "extends": ".build-image-using-buildah",
     "variables": {
         "KUBERNETES_CPU_LIMIT": 4,
@@ -153,6 +153,7 @@ build_spackah_yaml = {
         ),
     },
     "before_script": [
+        "mkdir ${BUILD_PATH}",
         "cp $SPACK_ENV_DIR/spack.yaml ${BUILD_PATH}/",
     ],
 }
@@ -227,6 +228,9 @@ build_custom_containers_yaml = {
 docker_hub_push_yaml = {
     "stage": "push to docker hub",
     "image": "ubuntu:latest",
+    "variables": {
+        "timeout": "4h",
+    },
     "script": [
         "apt-get update",
         "apt-get install -y ca-certificates podman",
@@ -234,6 +238,7 @@ docker_hub_push_yaml = {
         "podman login -u ${DOCKERHUB_USER} -p ${DOCKERHUB_PASSWORD} --tls-verify=false docker.io",
         "podman pull ${CI_REGISTRY_IMAGE}/${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG}",
         "echo podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
+        "podman image list",
         "echo Pushing, possibly twice because podman sometimes fails on the first attempt",
         "podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG} || podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
     ],
