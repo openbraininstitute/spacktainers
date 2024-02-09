@@ -729,12 +729,16 @@ class Spackah(BaseContainer):
             docker_hub_auth_token,
             f"{self.hub_namespace}/{self.hub_repo}",
         )
-        repo_spack_lock_checksum = container_info["Labels"][
-            "ch.epfl.bbpgitlab.spack_lock_sha256"
-        ]
-        repo_container_checksum = container_info["Labels"][
-            "ch.epfl.bbpgitlab.container_checksum"
-        ]
+        try:
+            repo_spack_lock_checksum = container_info["Labels"][
+                "ch.epfl.bbpgitlab.spack_lock_sha256"
+            ]
+            repo_container_checksum = container_info["Labels"][
+                "ch.epfl.bbpgitlab.container_checksum"
+            ]
+        except KeyError:
+            logger.info("Missing one of our checksums - need to push to Docker Hub")
+            return True
 
         logger.debug(f"existing spack.lock checksum: {repo_spack_lock_checksum}")
         logger.debug(f"my spack.lock checksum: {self.spack_lock_checksum}")
