@@ -148,7 +148,9 @@ class BaseContainer:
                 f"--override-arch={architecture}",
                 f"docker://{registry_image}:{self.registry_image_tag}",
             ]
-            logger.debug(f"Running `{skopeo_inspect_cmd}`")
+            logger.debug(
+                f"Running `{' '.join(skopeo_inspect_cmd).replace(registry_password, 'MASKED')}`"
+            )
             result = subprocess.run(skopeo_inspect_cmd, capture_output=True)
 
             if result.returncode != 0:
@@ -722,7 +724,7 @@ class Spackah(BaseContainer):
             return True
 
         container_info = self.container_info(
-            "hub.docker.com",
+            "docker.io",
             docker_hub_user,
             docker_hub_auth_token,
             f"{self.hub_namespace}/{self.hub_repo}",
@@ -734,15 +736,15 @@ class Spackah(BaseContainer):
             "ch.epfl.bbpgitlab.container_checksum"
         ]
 
-        logger.debug(f"existing spack.lock checksum: {existing_spack_lock_checksum}")
+        logger.debug(f"existing spack.lock checksum: {repo_spack_lock_checksum}")
         logger.debug(f"my spack.lock checksum: {self.spack_lock_checksum}")
 
         logger.debug(f"existing container checksum: {repo_container_checksum}")
         logger.debug(f"my container checksum: {self.container_checksum}")
 
         if (
-            existing_container_checksum == self.container_checksum
-            and existing_spack_lock_checksum == self.spack_lock_checksum
+            repo_container_checksum == self.container_checksum
+            and repo_spack_lock_checksum == self.spack_lock_checksum
         ):
             logger.info(
                 f"No need to push {self.name}:{self.registry_image_tag} to docker hub"

@@ -153,7 +153,7 @@ build_spacktainer_yaml = {
         ),
     },
     "before_script": [
-        "mkdir ${BUILD_PATH}",
+        "mkdir -p ${BUILD_PATH}",
         "cp $SPACK_ENV_DIR/spack.yaml ${BUILD_PATH}/",
     ],
 }
