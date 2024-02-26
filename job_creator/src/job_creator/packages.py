@@ -60,20 +60,11 @@ def process_spack_yaml(specs, package_restrictions, architecture):
     spack["spack"]["specs"] = specs
     merge_dicts(spack, {"spack": {"packages": package_restrictions}})
 
-    spack["spack"]["gitlab-ci"]["tags"] = [architecture_map[architecture]["tag"]]
-    mapping = next(
-        mapping
-        for mapping in spack["spack"]["gitlab-ci"]["mappings"]
-        if isinstance(mapping, dict) and "runner-attributes" in mapping
-    )
-    mapping["runner-attributes"]["tags"] = [architecture_map[architecture]["tag"]]
-    mapping["runner-attributes"]["image"] = builder_image()
-    mapping["runner-attributes"]["image"]["entrypoint"] = [""]
-    mapping["match"] = [architecture_map[architecture]["base_arch"]]
-    spack["spack"]["gitlab-ci"]["service-job-attributes"]["image"] = builder_image()
-    spack["spack"]["gitlab-ci"]["service-job-attributes"]["tags"] = [
-        architecture_map[architecture]["tag"]
-    ]
+    for section in spack["spack"]["ci"]["pipeline-gen"]:
+        for key in section.keys():
+            section[key]["tags"] = [architecture_map[architecture]["tag"]]
+            section[key]["image"] = builder_image()
+            section[key]["image"]["entrypoint"] = [""]
 
     spack["spack"]["mirrors"][
         "bbpS3_upload"

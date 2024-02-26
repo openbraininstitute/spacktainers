@@ -10,7 +10,7 @@ bbp_containerizer_include_yaml = {
             "project": "nse/bbp-containerizer",
             "file": "/python/ci/templates/convert-image.yml",
         }
-    ]
+    ],
 }
 
 buildah_build_yaml = {
@@ -35,6 +35,9 @@ buildah_build_yaml = {
             ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_BRANCH" '
         ),
     },
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 multiarch_yaml = {
@@ -60,6 +63,9 @@ multiarch_yaml = {
         "    podman manifest push --tls-verify=false mylist-latest %REGISTRY_IMAGE%:latest",
         "fi",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 packages_yaml = {
@@ -77,10 +83,14 @@ packages_yaml = {
         "spack env activate --without-view .",
         "spack config blame packages",
         "spack config blame mirrors",
+        "spack compiler find",
         "spack concretize -f",
         'spack -d ci generate --check-index-only --artifacts-root "${ENV_DIR}" --output-file "${ENV_DIR}/pipeline.yml"',
     ],
     "artifacts": {"when": "always", "paths": ["${ENV_DIR}"]},
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 process_spack_pipeline_yaml = {
@@ -93,6 +103,9 @@ process_spack_pipeline_yaml = {
         "jc process-spack-pipeline -f ${SPACK_GENERATED_PIPELINE} -o ${OUTPUT_DIR}",
     ],
     "artifacts": {"when": "always", "paths": ["artifacts.*", "spack_pipeline.yaml"]},
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 clean_cache_yaml = {
@@ -105,6 +118,9 @@ clean_cache_yaml = {
         "git clone https://github.com/bluebrain/spack",
         "spackitor -e ${SPACK_ENV} --bucket ${BUCKET} --max-age ${MAX_AGE} --spack-directory ./spack",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 generate_containers_workflow_yaml = {
@@ -130,6 +146,9 @@ generate_containers_workflow_yaml = {
             "job_creator.log",
         ],
     },
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 build_spacktainer_yaml = {
@@ -156,6 +175,9 @@ build_spacktainer_yaml = {
         "mkdir -p ${BUILD_PATH}",
         "cp $SPACK_ENV_DIR/spack.yaml ${BUILD_PATH}/",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 create_sif_yaml = {
@@ -206,6 +228,9 @@ create_sif_yaml = {
         "    fi",
         "fi",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 build_custom_containers_yaml = {
@@ -223,6 +248,9 @@ build_custom_containers_yaml = {
         "echo Uploading ${CONTAINER_FILENAME} to ${S3_CONTAINER_PATH}",
         "s3cmd put --add-header x-amz-meta-digest:${SOURCE_DIGEST} ${CONTAINER_FILENAME} ${S3_CONTAINER_PATH}",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 docker_hub_push_yaml = {
@@ -242,6 +270,9 @@ docker_hub_push_yaml = {
         "echo Pushing, possibly twice because podman sometimes fails on the first attempt",
         "podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG} || podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }
 
 bb5_download_sif_yaml = {
@@ -279,4 +310,7 @@ bb5_download_sif_yaml = {
         "echo s3cmd get --config=_s3cfg s3://${BUCKET}/containers/spacktainerizah/${SIF_FILENAME} ${FULL_SIF_PATH}",
         "s3cmd get --config=_s3cfg s3://${BUCKET}/containers/spacktainerizah/${SIF_FILENAME} ${FULL_SIF_PATH}",
     ],
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
 }

@@ -290,7 +290,9 @@ class Spacktainerizer(BaseContainer):
 
         for architecture in self.architectures:
             arch_job = Job(
-                self.job_name, architecture, **copy.deepcopy(buildah_build_yaml)
+                self.job_name,
+                architecture=architecture,
+                **copy.deepcopy(buildah_build_yaml),
             )
             arch_job.variables["CI_REGISTRY_IMAGE"] = self.registry_image
             arch_job.variables["REGISTRY_IMAGE_TAG"] = self.registry_image_tag
@@ -475,6 +477,9 @@ class Spackah(BaseContainer):
         """
         spack_yaml = copy.deepcopy(spack_template)
         merge_dicts(spack_yaml, self.container_yaml)
+        spack_yaml["spack"]["packages"]["all"]["require"] = architecture_map[
+            self.architecture
+        ]["spacktainer_compiler_require"]
         write_yaml(spack_yaml, self.spack_env_dir / "spack.yaml")
 
     def get_main_package(self) -> str:
@@ -536,11 +541,20 @@ class Spackah(BaseContainer):
             **copy.deepcopy(build_spacktainer_yaml),
         )
 
+        bucket_name = architecture_map[self.architecture]["cache_bucket"]["name"]
+        access_key_var = architecture_map[self.architecture]["cache_bucket"][
+            "keypair_variables"
+        ]["access_key"]
+        secret_key_var = architecture_map[self.architecture]["cache_bucket"][
+            "keypair_variables"
+        ]["secret_key"]
         buildah_extra_args = [
             f"--label org.opencontainers.image.title={self.name}",
             f"--label org.opencontainers.image.version={self.registry_image_tag}",
             f"--label ch.epfl.bbpgitlab.spack_lock_sha256={self.spack_lock_checksum}",
             f"--label ch.epfl.bbpgitlab.container_checksum={self.container_checksum}",
+            f'--build-arg MIRROR_AUTH_ARG="--s3-access-key-id ${access_key_var} --s3-access-key-secret ${secret_key_var}"',
+            f"--build-arg CACHE_BUCKET={bucket_name}",
         ]
 
         build_path = "spacktainer"
@@ -893,6 +907,21 @@ class CustomContainer(BaseContainer):
         Inspect the container we're converting to SIF and get its checksum
         """
         source_image, source_version = self.get_source()
+        registry = os.environ.get("CI_REGISTRY")
+        registry_user = os.environ.get("CI_REGISTRY_USER")
+        registry_password = os.environ.get("CI_REGISTRY_PASSWORD")
+        skopeo_login_cmd = [
+            "skopeo",
+            "login",
+            "-u",
+            registry_user,
+            "-p",
+            registry_password,
+            registry,
+        ]
+        logger.debug(f"Running `{skopeo_login_cmd}`")
+        subprocess.run(skopeo_login_cmd)
+
         skopeo_inspect_cmd = [
             "skopeo",
             "inspect",
@@ -955,8 +984,8 @@ class CustomContainer(BaseContainer):
         if self.needs_build():
             build_job = Job(
                 f"build sif file for {self.name}",
-                force_needs=True,
                 architecture=self.architecture,
+                force_needs=True,
                 bucket="infra",
                 **copy.deepcopy(build_custom_containers_yaml),
             )
@@ -1011,7 +1040,7 @@ def generate_base_container_workflow(
     return workflow
 
 
-def generate_spack_containers_workflow(
+def generate_spacktainers_workflow(
     architecture: str, out_dir: Path, s3cmd_version: str
 ) -> Workflow:
     """
@@ -1071,6 +1100,9 @@ def generate_spack_containers_workflow(
             Job(
                 name="No containers to rebuild",
                 script="echo No containers to rebuild",
+                rules=[
+                    {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+                ],
             )
         )
     return workflow

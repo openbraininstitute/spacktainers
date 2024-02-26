@@ -1,3 +1,9 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
 stages:
   - unit tests
   - generate
@@ -12,6 +18,7 @@ variables:
 generate base pipeline:
   image: ubuntu:latest
   stage: generate
+  needs: []
   variables:
     SINGULARITY_VERSION: 4.0.2
     S3CMD_VERSION: 2.3.0
@@ -28,6 +35,10 @@ generate base pipeline:
       - merged_spack*yaml
       - job_creator.log
       - spacktainer
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 base containers and pipeline generation:
   stage: build base containers
@@ -39,6 +50,10 @@ base containers and pipeline generation:
       - artifact: generated_pipeline.yaml
         job: generate base pipeline
     strategy: depend
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 gather child artifacts:
   stage: build cache
@@ -67,6 +82,10 @@ gather child artifacts:
       - spacktainer.artifacts.*
     reports:
       dotenv: build.env
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 populate buildcache for amd64:
   stage: build cache
@@ -78,18 +97,25 @@ populate buildcache for amd64:
       - artifact: spack.artifacts.amd64/spack_pipeline.yaml
         job: gather child artifacts
     strategy: depend
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
-# populate buildcache for arm64:
-#   needs:
-#     - job: gather child artifacts
-#       artifacts: true
-#   trigger:
-#     include:
-#       - artifact: artifacts.arm64/spack_pipeline.yaml
-#         job: gather child artifacts
-#     strategy: depend
-#   rules:
-#     - allow_failure: true
+populate buildcache for arm64:
+  stage: build cache
+  needs:
+    - job: gather child artifacts
+      artifacts: true
+  trigger:
+    include:
+      - artifact: spack.artifacts.arm64/spack_pipeline.yaml
+        job: gather child artifacts
+    strategy: depend
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 
 build spacktainers for amd64:
@@ -103,6 +129,26 @@ build spacktainers for amd64:
       - artifact: spacktainer.artifacts.amd64/artifacts.amd64/spacktainer_pipeline.yaml
         job: gather child artifacts
     strategy: depend
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+build spacktainers for arm64:
+  stage: build spacktainer containers
+  needs:
+    - job: gather child artifacts
+      artifacts: true
+    - populate buildcache for arm64
+  trigger:
+    include:
+      - artifact: spacktainer.artifacts.arm64/artifacts.arm64/spacktainer_pipeline.yaml
+        job: gather child artifacts
+    strategy: depend
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 test spackitor:
   stage: unit tests
@@ -115,7 +161,7 @@ test spackitor:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        - spackitor/**
+        - spackitor/**/*
   coverage: '/TOTAL.*\s+(\d+%)$/'
   artifacts:
     when: always
@@ -133,6 +179,7 @@ cleanup deleted branch containers from the bucket:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
   before_script:
     - sed -i 's/^access_key.*/access_key='${AWS_INFRASTRUCTURE_ACCESS_KEY_ID}'/' /root/.s3cfg
     - sed -i 's/^secret_key.*/secret_key='${AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY}'/' /root/.s3cfg
@@ -166,11 +213,11 @@ cleanup deleted branch containers from bb5:
   tags: [bb5_map]
   variables:
     CONTAINER_ROOT: /gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainerizah
-  # TODO: rules
-  # rules:
-  #   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  #     when: never
-  #   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
   script:
     - module load unstable git
     - git fetch

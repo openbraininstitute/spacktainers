@@ -105,6 +105,11 @@ ONBUILD RUN if [[ -n "${GITLAB_PRIVATE_TOKEN}" ]]; then git config --global url.
 
 ONBUILD RUN git config --list
 
+ONBUILD ARG MIRROR_URL_ARG
+ONBUILD ARG MIRROR_AUTH_ARG
+ONBUILD ARG CACHE_BUCKET
+ONBUILD RUN if [ -n "${CACHE_BUCKET}" ] ; then echo spack mirror add --scope=site ${MIRROR_URL_ARG} ${MIRROR_AUTH_ARG} build_s3 s3://${CACHE_BUCKET}; fi
+ONBUILD RUN if [ -n "${CACHE_BUCKET}" ]; then spack mirror add --scope=site ${MIRROR_URL_ARG} ${MIRROR_AUTH_ARG} build_s3 s3://${CACHE_BUCKET}; fi
 ONBUILD RUN spack config blame mirrors
 
 # Install the software, remove unnecessary deps
@@ -114,6 +119,7 @@ ONBUILD RUN cd /opt/spack-environment && \
             spack install --fail-fast && \
             spack gc -y
 
+ONBUILD RUN if [ -n "${MIRROR_URL}" ]; then spack mirror rm build_s3; fi
 # Strip all the binaries
 ONBUILD RUN find -L /opt/view/* -type f -exec readlink -f '{}' \; | \
             xargs file -i | \

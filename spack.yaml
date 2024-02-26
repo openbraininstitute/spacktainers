@@ -21,31 +21,43 @@ spack:
   view: false
   mirrors:
     bbpS3_upload: SPACK_BUILD_CACHE_BUCKET
-  gitlab-ci:
-    before_script:
-    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
-      ssh://git@bbpgitlab.epfl.ch/
-    - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf git@bbpgitlab.epfl.ch:'
-    - . $SPACK_ROOT/share/spack/setup-env.sh
-    - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
-    - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
-    script:
-    - pushd ${SPACK_CONCRETE_ENV_DIR} && spack env activate --without-view . && popd
-    - spack -d ci rebuild
-    mappings:
-    - match:
-      - "%BASE_ARCH%"
-      runner-attributes:
-        tags: []
+  ci:
+    target: gitlab
+    pipeline-gen:
+    - build-job:
+        before_script:
+        - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          ssh://git@bbpgitlab.epfl.ch/
+        - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          git@bbpgitlab.epfl.ch:'
+        - . $SPACK_ROOT/share/spack/setup-env.sh
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
+        script:
+        - pushd ${SPACK_CONCRETE_ENV_DIR} && spack env activate --without-view . &&
+          popd
+        - spack -d ci rebuild
+    - reindex-job:
         image:
-          name: "bbpgitlab.epfl.ch:5050/hpc/spacktainerizer/${BASE_OS}/builder:latest"
-          entrypoint: ['']
+          name: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:2024.02.14-bsd-426-architectures
           pull_policy: always
-    service-job-attributes:
-      image: "bbpgitlab.epfl.ch:5050/hpc/spacktainerizer/${BASE_OS}/builder:latest"
-      before_script:
-      - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/
-      - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf git@bbpgitlab.epfl.ch:'
-      - . $SPACK_ROOT/share/spack/setup-env.sh
-      - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
-      - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
+        before_script:
+        - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          ssh://git@bbpgitlab.epfl.ch/
+        - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          git@bbpgitlab.epfl.ch:'
+        - . $SPACK_ROOT/share/spack/setup-env.sh
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
+    - cleanup-job:
+        image:
+          name: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:2024.02.14-bsd-426-architectures
+          pull_policy: always
+        before_script:
+        - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          ssh://git@bbpgitlab.epfl.ch/
+        - 'git config --add --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
+          git@bbpgitlab.epfl.ch:'
+        - . $SPACK_ROOT/share/spack/setup-env.sh
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PUBLIC"
+        - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"

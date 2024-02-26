@@ -12,7 +12,7 @@ from job_creator.architectures import architecture_map
 from job_creator.ci_objects import Job, Trigger, Workflow
 from job_creator.containers import (Spacktainerizer,
                                     generate_base_container_workflow,
-                                    generate_spack_containers_workflow)
+                                    generate_spacktainers_workflow)
 from job_creator.job_templates import (clean_cache_yaml,
                                        generate_containers_workflow_yaml)
 from job_creator.logging_config import LOGGING_CONFIG
@@ -48,7 +48,7 @@ def generate_spacktainer_workflow(architecture, out_dir, s3cmd_version):
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    workflow = generate_spack_containers_workflow(architecture, out_dir, s3cmd_version)
+    workflow = generate_spacktainers_workflow(architecture, out_dir, s3cmd_version)
     write_yaml(workflow.to_dict(), f"{out_dir}/spacktainer_pipeline.yaml")
 
 
@@ -175,9 +175,9 @@ def generate_containers_workflow(existing_workflow, architectures, s3cmd_version
     for architecture in architectures:
         arch_job = Job(
             "generate spacktainer jobs",
+            architecture=architecture,
             force_needs=True,
             **copy.deepcopy(generate_containers_workflow_yaml),
-            architecture=architecture,
         )
         arch_job.image = {
             "name": f"{builder.registry_image}:{builder.registry_image_tag}",

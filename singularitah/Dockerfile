@@ -21,4 +21,4 @@ RUN wget https://github.com/s3tools/s3cmd/releases/download/v${S3CMD_VERSION}/s3
 RUN tar xf s3cmd-${S3CMD_VERSION}.tar.gz -C /opt/s3cmd/ --strip-components=1
 ENV PATH="${PATH}:/opt/s3cmd"
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["/bin/bash", "-c"]

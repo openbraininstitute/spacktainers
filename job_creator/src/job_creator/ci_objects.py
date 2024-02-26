@@ -24,7 +24,7 @@ class Workflow:
     def __init__(self, include=None):
         self.stages = []
         self.jobs = []
-        self.include = include if include else []
+        self.include = include or []
 
     def add_include(self, include):
         if include not in self.include:
@@ -133,8 +133,8 @@ class Job:
     def __init__(
         self,
         name,
-        force_needs=False,
         architecture=None,
+        force_needs=False,
         needs=None,
         script=None,
         stage=None,
@@ -153,12 +153,12 @@ class Job:
         self.extra_properties = []
         self.name = name
         self.tags = []
-        self.needs = needs if needs else []
-        self.script = script if script else None
-        self.stage = stage if stage else None
-        self.artifacts = artifacts if artifacts else None
+        self.needs = needs or []
+        self.script = script or None
+        self.stage = stage or None
+        self.artifacts = artifacts or None
         self.before_script = before_script if before_script else []
-        self.variables = variables if variables else {}
+        self.variables = variables or {}
         self.timeout = timeout
         self.image = None
         self._bucket = bucket
@@ -324,8 +324,8 @@ class Trigger:
             self.name += f" for {architecture}"
 
         self.trigger = trigger
-        self.needs = needs if needs else None
-        self.stage = stage if stage else None
+        self.needs = needs
+        self.stage = stage
 
     def to_dict(self):
         as_dict = {"trigger": self.trigger}
