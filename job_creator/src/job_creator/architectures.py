@@ -1,7 +1,7 @@
 import os
 
 
-prod = os.environ.get("CI_COMMIT_BRANCH") == os.environ.get("CI_DEFAULT_BRANCH")
+prod = os.environ.get("CI_COMMIT_REF_SLUG") == os.environ.get("CI_DEFAULT_BRANCH")
 
 architecture_map = {
     "amd64": {
@@ -50,7 +50,7 @@ architecture_map = {
                 "secret_key": "AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY",
             },
         },
-        "spacktainer_compiler_require": "%arm",
-        "base_arch": "%arm os=ubuntu22.04 target=armv8.4a",
+        "spacktainer_compiler_require": "%gcc@12",
+        "base_arch": "%gcc@12 os=ubuntu22.04 target=armv8.4a",
     },
 }

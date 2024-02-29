@@ -71,11 +71,12 @@ class BaseContainer:
         The tag the container will have once created: at least the date,
         optionally followed by the branch name if not building on CI_DEFAULT_BRANCH
         """
-        if os.environ.get("CI_COMMIT_BRANCH") == os.environ.get("CI_DEFAULT_BRANCH"):
+        branch = os.environ.get("CI_COMMIT_REF_SLUG")
+        if branch == os.environ.get("CI_DEFAULT_BRANCH"):
             tag = "latest"
         else:
             tag = datetime.strftime(datetime.today(), "%Y.%m.%d")
-            tag += f"-{os.environ.get('CI_COMMIT_BRANCH')}"
+            tag += f"-{branch}"
 
         return tag
 
@@ -522,6 +523,9 @@ class Spackah(BaseContainer):
             ci_commit_ref_slug = os.environ.get("CI_COMMIT_REF_SLUG")
             tag = f"{main_package_version}__{ci_commit_ref_slug}"
 
+        if self.architecture == "arm64":
+            logger.info("We want an architecture suffix on arm64")
+            tag = f"{tag}-{self.architecture}"
         return tag
 
     def _create_build_job(self, builder_image_tag: str) -> Job:
@@ -556,6 +560,13 @@ class Spackah(BaseContainer):
             f'--build-arg MIRROR_AUTH_ARG="--s3-access-key-id ${access_key_var} --s3-access-key-secret ${secret_key_var}"',
             f"--build-arg CACHE_BUCKET={bucket_name}",
         ]
+
+        if endpoint_url := architecture_map[self.architecture]["cache_bucket"].get(
+            "endpoint_url"
+        ):
+            buildah_extra_args.append(
+                f'--build-arg MIRROR_URL_ARG="--s3-endpoint-url {endpoint_url}"'
+            )
 
         build_path = "spacktainer"
 
@@ -717,7 +728,8 @@ class Spackah(BaseContainer):
         * tag not present
         * checksums mismatch
         """
-        if os.environ.get("CI_COMMIT_BRANCH") != os.environ.get("CI_DEFAULT_BRANCH"):
+        branch = os.environ.get("CI_COMMIT_REF_SLUG")
+        if branch != os.environ.get("CI_DEFAULT_BRANCH"):
             logger.info("Not on default branch, no need to push to docker hub")
             return False
 

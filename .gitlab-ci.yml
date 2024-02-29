@@ -102,20 +102,20 @@ populate buildcache for amd64:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "web"
 
-populate buildcache for arm64:
-  stage: build cache
-  needs:
-    - job: gather child artifacts
-      artifacts: true
-  trigger:
-    include:
-      - artifact: spack.artifacts.arm64/spack_pipeline.yaml
-        job: gather child artifacts
-    strategy: depend
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "web"
+# populate buildcache for arm64:
+#   stage: build cache
+#   needs:
+#     - job: gather child artifacts
+#       artifacts: true
+#   trigger:
+#     include:
+#       - artifact: spack.artifacts.arm64/spack_pipeline.yaml
+#         job: gather child artifacts
+#     strategy: depend
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#     - if: $CI_PIPELINE_SOURCE == "web"
 
 
 build spacktainers for amd64:
@@ -134,21 +134,21 @@ build spacktainers for amd64:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "web"
 
-build spacktainers for arm64:
-  stage: build spacktainer containers
-  needs:
-    - job: gather child artifacts
-      artifacts: true
-    - populate buildcache for arm64
-  trigger:
-    include:
-      - artifact: spacktainer.artifacts.arm64/artifacts.arm64/spacktainer_pipeline.yaml
-        job: gather child artifacts
-    strategy: depend
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "web"
+# build spacktainers for arm64:
+#   stage: build spacktainer containers
+#   needs:
+#     - job: gather child artifacts
+#       artifacts: true
+#     - populate buildcache for arm64
+#   trigger:
+#     include:
+#       - artifact: spacktainer.artifacts.arm64/artifacts.arm64/spacktainer_pipeline.yaml
+#         job: gather child artifacts
+#     strategy: depend
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#     - if: $CI_PIPELINE_SOURCE == "web"
 
 test spackitor:
   stage: unit tests

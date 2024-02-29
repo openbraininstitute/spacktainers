@@ -69,7 +69,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
       * configure "stage" dependencies
     """
     logger.info(
-        "Processing spack pipeline for pipeline file {pipeline_file} with output dir {out_dir}"
+        f"Processing spack pipeline for pipeline file {pipeline_file} with output dir {out_dir}"
     )
     architecture = out_dir.split(".")[1]
     pipeline = load_yaml(pipeline_file)
@@ -89,6 +89,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
         item.pop("needs", None)
         stage = item.pop("stage", "no stage")
         job = Job(name=name, architecture=architecture, **item)
+        job.rules.append({"when": "always"})
 
         job.add_spack_mirror()
         job.set_aws_variables()
@@ -125,6 +126,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
         ],
         stage="run spack-generated pipelines",
         artifacts={"when": "always", "paths": ["*.yaml", "artifacts.*"]},
+        rules=[{"when": "always"}],
     )
     build_workflow.add_job(collect_job)
 
@@ -158,6 +160,7 @@ def process_spack_pipeline(pipeline_file, out_dir):
                 },
                 needs=needs,
                 stage=stage,
+                rules=[{"when": "always"}],
             )
             build_workflow.add_trigger(trigger)
             write_yaml(stage_pipeline, pipeline_file)

@@ -32,7 +32,7 @@ buildah_build_yaml = {
             ' --label org.opencontainers.image.source="$CI_PROJECT_URL"'
             ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
             ' --label ch.epfl.bbpgitlab.ci-pipeline-url="$CI_PIPELINE_URL"'
-            ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_BRANCH" '
+            ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_REF_SLUG" '
         ),
     },
     "rules": [
@@ -53,7 +53,7 @@ multiarch_yaml = {
         'echo "Adding %REGISTRY_IMAGE%:%REGISTRY_IMAGE_TAG%-amd64"',
         "podman manifest add --tls-verify=false mylist %REGISTRY_IMAGE%:%REGISTRY_IMAGE_TAG%-amd64",
         "podman manifest push --tls-verify=false mylist %REGISTRY_IMAGE%:%REGISTRY_IMAGE_TAG%",
-        'if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then',
+        'if [[ "$CI_COMMIT_REF_SLUG" == "$CI_DEFAULT_BRANCH" ]]; then',
         '    echo "Also creating multiarch manifest for %REGISTRY_IMAGE%:latest multiarch"',
         "    podman manifest create mylist-latest",
         '    echo "Adding %REGISTRY_IMAGE%:latest-arm64"',
@@ -166,7 +166,7 @@ build_spacktainer_yaml = {
             ' --label org.opencontainers.image.source="$CI_PROJECT_URL"'
             ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
             ' --label ch.epfl.bbpgitlab.ci-pipeline-url="$CI_PIPELINE_URL"'
-            ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_BRANCH"'
+            ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_REF_SLUG"'
             ' --build-arg GITLAB_CI="$GITLAB_CI"'
             ' --build-arg CI_JOB_TOKEN="$CI_JOB_TOKEN"'
         ),

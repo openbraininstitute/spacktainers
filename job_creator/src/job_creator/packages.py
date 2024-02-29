@@ -84,7 +84,7 @@ def builder_image():
     """
     Return the builder image as it needs to appear in the pipeline yaml
     """
-    current_branch = os.environ.get("CI_COMMIT_BRANCH")
+    current_branch = os.environ.get("CI_COMMIT_REF_SLUG")
     if current_branch == os.environ.get("CI_DEFAULT_BRANCH"):
         image_tag = "latest"
     else:

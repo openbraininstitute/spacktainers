@@ -143,6 +143,7 @@ class Job:
         variables=None,
         timeout=None,
         bucket="cache",
+        rules=None,
         **kwargs,
     ):
         """
@@ -160,6 +161,7 @@ class Job:
         self.before_script = before_script if before_script else []
         self.variables = variables or {}
         self.timeout = timeout
+        self.rules = rules or []
         self.image = None
         self._bucket = bucket
         for key, value in kwargs.items():
@@ -308,6 +310,7 @@ class Job:
             "variables",
             "image",
             "timeout",
+            "rules",
         ] + self.extra_properties:
             as_dict.update(self._property_as_dict(prop_name))
 
@@ -318,7 +321,7 @@ class Job:
 
 
 class Trigger:
-    def __init__(self, name, trigger, needs=None, stage=None, architecture=None):
+    def __init__(self, name, trigger, needs=None, stage=None, architecture=None, rules=None):
         self.name = name
         if architecture:
             self.name += f" for {architecture}"
@@ -326,6 +329,7 @@ class Trigger:
         self.trigger = trigger
         self.needs = needs
         self.stage = stage
+        self.rules = rules or []
 
     def to_dict(self):
         as_dict = {"trigger": self.trigger}
@@ -333,5 +337,7 @@ class Trigger:
             as_dict["needs"] = self.needs
         if self.stage:
             as_dict["stage"] = self.stage
+        if self.rules:
+            as_dict["rules"] = self.rules
 
         return as_dict

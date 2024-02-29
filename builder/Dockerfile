@@ -61,8 +61,8 @@ RUN spack compiler find --scope=site \
 RUN spack external find --scope=site opengl
 
 # Possible ARM customizations (require Spack sourced)
-COPY acfl.sh acfl.sh
-RUN ./acfl.sh
+# COPY acfl.sh acfl.sh
+# RUN ./acfl.sh
 
 # Add in an external ISPC for the Viz team
 RUN cd /opt \
