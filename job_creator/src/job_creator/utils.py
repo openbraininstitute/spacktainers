@@ -87,10 +87,10 @@ def get_arch_or_multiarch_job(workflow, architecture, container_name="builder"):
     builder_job_name = f"build {container_name}"
 
     logger.debug(f"Getting {container_name} build jobs in {workflow.jobs}")
-    if multiarch_jobs := workflow.get_job(multiarch_job_name):
+    if multiarch_jobs := workflow.get_job(multiarch_job_name, startswith=True):
         logger.debug(f"Multi-arch jobs found: {multiarch_jobs}")
         return multiarch_jobs
-    elif build_jobs := workflow.get_job(builder_job_name):
+    elif build_jobs := workflow.get_job(builder_job_name, startswith=True):
         logger.debug(f"Build jobs found: {build_jobs}")
         return build_jobs
     else:

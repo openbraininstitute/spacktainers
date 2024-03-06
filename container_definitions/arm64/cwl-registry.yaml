@@ -1,0 +1,4 @@
+spack:
+  specs:
+    - py-cwl-registry
+    - brainbuilder

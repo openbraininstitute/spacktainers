@@ -21,10 +21,12 @@ class Workflow:
     Make sure to add your jobs/stages in the order they need to execute!
     """
 
-    def __init__(self, include=None):
+    def __init__(self, include=None, rules=None, variables=None):
         self.stages = []
         self.jobs = []
         self.include = include or []
+        self.rules = rules or []
+        self.variables = variables or {}
 
     def add_include(self, include):
         if include not in self.include:
@@ -34,7 +36,7 @@ class Workflow:
         if stage not in self.stages:
             self.stages.append(stage)
 
-    def _add_joblike(self, add_type, joblike):
+    def _add_joblike(self, add_type, joblike, replace=False):
         if joblike.name in self:
             logger.debug(f"{add_type.capitalize()} {joblike.name} already in workflow")
             return
@@ -42,8 +44,40 @@ class Workflow:
         if joblike.stage:
             self.add_stage(joblike.stage)
 
-    def add_job(self, job):
-        self._add_joblike("job", job)
+    def add_job(self, job, special_spack_treatment=False):
+        """
+        Add a job to the workflow
+
+        :param job: the Job object to add
+        :param special_spack_treatment: when merging spack pipelines, we'll encounter duplicate
+                                        jobs. In this case, we'll want the job in the earliest
+                                        possible stage.
+
+        """
+        replace = False
+        if (
+            job.name in self
+            and not job.name.startswith("rebuild-index")
+            and special_spack_treatment
+        ):
+            logger.debug(f"Job {job.name} already in workflow, special spack treatment set")
+            existing_job = self.get_job(job.name)[0]
+            existing_stage_number = int(existing_job.stage.split("-")[1])
+            new_stage_number = int(job.stage.split("-")[1])
+            if new_stage_number < existing_stage_number:
+                logger.debug(
+                    f"Stage {new_stage_number} < {existing_stage_number} - replacing"
+                )
+                replace = True
+            elif new_stage_number == existing_stage_number:
+                logger.debug(
+                    f"Stage {existing_stage_number} == {new_stage_number} - not replacing"
+                )
+            else:
+                logger.debug(
+                    f"Stage {existing_stage_number} < {new_stage_number} - not replacing"
+                )
+        self._add_joblike("job", job, replace)
 
     def get_job(self, job_name, startswith=False):
         """
@@ -69,6 +103,10 @@ class Workflow:
         as_dict.update({job.name: job.to_dict() for job in self.jobs})
         if self.include:
             as_dict["include"] = self.include
+        if self.rules:
+            as_dict["workflow"] = {"rules": self.rules}
+        if self.variables:
+            as_dict["variables"] = self.variables
         return as_dict
 
     def _dedup(self, seq):
@@ -144,6 +182,7 @@ class Job:
         timeout=None,
         bucket="cache",
         rules=None,
+        append_arch=True,
         **kwargs,
     ):
         """
@@ -155,9 +194,9 @@ class Job:
         self.name = name
         self.tags = []
         self.needs = needs or []
-        self.script = script or None
-        self.stage = stage or None
-        self.artifacts = artifacts or None
+        self.script = script
+        self.stage = stage
+        self.artifacts = artifacts
         self.before_script = before_script if before_script else []
         self.variables = variables or {}
         self.timeout = timeout
@@ -168,11 +207,12 @@ class Job:
             logger.debug(f"Setting {key}: {value}")
             self.extra_properties.append(key)
             setattr(self, key, value)
-        self.set_architecture(architecture)
+        self.set_architecture(architecture, append_arch)
 
-    def set_architecture(self, architecture=None):
+    def set_architecture(self, architecture=None, append_arch=True):
         if architecture:
-            self.name += f" for {architecture}"
+            if append_arch:
+                self.name += f" for {architecture}"
             self.architecture = architecture
             architecture_tag = architecture_map[architecture]["tag"]
             if architecture_tag not in self.tags:
@@ -321,7 +361,9 @@ class Job:
 
 
 class Trigger:
-    def __init__(self, name, trigger, needs=None, stage=None, architecture=None, rules=None):
+    def __init__(
+        self, name, trigger, needs=None, stage=None, architecture=None, rules=None
+    ):
         self.name = name
         if architecture:
             self.name += f" for {architecture}"

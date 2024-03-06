@@ -480,7 +480,7 @@ class Spackah(BaseContainer):
         merge_dicts(spack_yaml, self.container_yaml)
         spack_yaml["spack"]["packages"]["all"]["require"] = architecture_map[
             self.architecture
-        ]["spacktainer_compiler_require"]
+        ]["base_arch"]
         write_yaml(spack_yaml, self.spack_env_dir / "spack.yaml")
 
     def get_main_package(self) -> str:

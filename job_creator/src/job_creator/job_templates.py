@@ -1,3 +1,9 @@
+parent_pipeline_rule = {
+    "rules": [
+        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
+    ]
+}
+
 buildah_include_yaml = {
     "include": [
         {"project": "cs/gitlabci-templates", "file": "/build-image-using-buildah.yml"}
@@ -35,9 +41,7 @@ buildah_build_yaml = {
             ' --label ch.epfl.bbpgitlab.ci-commit-branch="$CI_COMMIT_REF_SLUG" '
         ),
     },
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 multiarch_yaml = {
@@ -63,9 +67,7 @@ multiarch_yaml = {
         "    podman manifest push --tls-verify=false mylist-latest %REGISTRY_IMAGE%:latest",
         "fi",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 packages_yaml = {
@@ -85,12 +87,10 @@ packages_yaml = {
         "spack config blame mirrors",
         "spack compiler find",
         "spack concretize -f",
-        'spack -d ci generate --check-index-only --artifacts-root "${ENV_DIR}" --output-file "${ENV_DIR}/pipeline.yml"',
+        'spack -d ci generate --check-index-only --artifacts-root "${ENV_DIR}" --output-file "${ENV_DIR}/${CI_JOB_NAME}.yml"',
     ],
     "artifacts": {"when": "always", "paths": ["${ENV_DIR}"]},
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 process_spack_pipeline_yaml = {
@@ -100,12 +100,14 @@ process_spack_pipeline_yaml = {
         "apt-get update && apt-get install -y ca-certificates git python3 python3-pip",
         "pip install --upgrade pip setuptools",
         "pip install -e ./job_creator",
-        "jc process-spack-pipeline -f ${SPACK_GENERATED_PIPELINE} -o ${OUTPUT_DIR}",
+        "find ${SPACK_PIPELINES_ARCH_DIR}",
+        "jc process-spack-pipeline -d ${SPACK_PIPELINES_ARCH_DIR} -o ${OUTPUT_DIR}",
     ],
-    "artifacts": {"when": "always", "paths": ["artifacts.*", "spack_pipeline.yaml"]},
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    "artifacts": {
+        "when": "always",
+        "paths": ["artifacts.*", "*spack_pipeline.yaml", "job_creator.log"],
+    },
+    **parent_pipeline_rule,
 }
 
 clean_cache_yaml = {
@@ -116,11 +118,9 @@ clean_cache_yaml = {
         "apt-get update && apt-get install -y git",
         "pip install ./spackitor",
         "git clone https://github.com/bluebrain/spack",
-        "spackitor -e ${SPACK_ENV} --bucket ${BUCKET} --max-age ${MAX_AGE} --spack-directory ./spack",
+        "spackitor ${SPACK_ENV_ARGS} --bucket ${BUCKET} --max-age ${MAX_AGE} --spack-directory ./spack",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 generate_containers_workflow_yaml = {
@@ -146,9 +146,7 @@ generate_containers_workflow_yaml = {
             "job_creator.log",
         ],
     },
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 build_spacktainer_yaml = {
@@ -175,9 +173,7 @@ build_spacktainer_yaml = {
         "mkdir -p ${BUILD_PATH}",
         "cp $SPACK_ENV_DIR/spack.yaml ${BUILD_PATH}/",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 create_sif_yaml = {
@@ -228,9 +224,7 @@ create_sif_yaml = {
         "    fi",
         "fi",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 build_custom_containers_yaml = {
@@ -248,9 +242,7 @@ build_custom_containers_yaml = {
         "echo Uploading ${CONTAINER_FILENAME} to ${S3_CONTAINER_PATH}",
         "s3cmd put --add-header x-amz-meta-digest:${SOURCE_DIGEST} ${CONTAINER_FILENAME} ${S3_CONTAINER_PATH}",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 docker_hub_push_yaml = {
@@ -270,9 +262,7 @@ docker_hub_push_yaml = {
         "echo Pushing, possibly twice because podman sometimes fails on the first attempt",
         "podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG} || podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }
 
 bb5_download_sif_yaml = {
@@ -310,7 +300,5 @@ bb5_download_sif_yaml = {
         "echo s3cmd get --config=_s3cfg s3://${BUCKET}/containers/spacktainerizah/${SIF_FILENAME} ${FULL_SIF_PATH}",
         "s3cmd get --config=_s3cfg s3://${BUCKET}/containers/spacktainerizah/${SIF_FILENAME} ${FULL_SIF_PATH}",
     ],
-    "rules": [
-        {"if": "$CI_PIPELINE_SOURCE == 'parent_pipeline'"},
-    ]
+    **parent_pipeline_rule,
 }

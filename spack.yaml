@@ -10,7 +10,7 @@ spack:
       providers:
         mpi: [mpich]
   concretizer:
-    unify: false
+    unify: true
     reuse: false
     targets:
       granularity: generic

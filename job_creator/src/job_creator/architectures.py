@@ -23,8 +23,7 @@ architecture_map = {
                 "secret_key": "AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY",
             },
         },
-        "spacktainer_compiler_require": "%gcc@12.3.0",
-        "base_arch": "%gcc@12.3.0 os=ubuntu22.04 target=x86_64_v3",
+        "base_arch": "%gcc@12 os=ubuntu22.04 target=x86_64_v3",
         "variables": {
             "KUBERNETES_CPU_REQUEST": 4,
             "KUBERNETES_CPU_LIMIT": 8,
@@ -50,7 +49,6 @@ architecture_map = {
                 "secret_key": "AWS_INFRASTRUCTURE_SECRET_ACCESS_KEY",
             },
         },
-        "spacktainer_compiler_require": "%gcc@12",
         "base_arch": "%gcc@12 os=ubuntu22.04 target=armv8.4a",
     },
 }

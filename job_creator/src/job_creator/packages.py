@@ -1,9 +1,10 @@
 import copy
-import glob
 import logging
 import logging.config
 import os
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 from ruamel.yaml import YAML
 
@@ -18,50 +19,35 @@ logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("job_creator")
 
 
-def read_container_definitions(arch):
+def read_container_definitions(arch: str) -> Tuple[str, Dict]:
     """
-    Read and iterate through all container definitions
+    Read and iterate through all container definitions, returning a tuple containing
+    the container name and its definition
     """
     yaml = YAML(typ="safe", pure=True)
-    for df in glob.glob(f"container_definitions/{arch}/*.yaml"):
-        logger.debug(f"Reading file {df}")
+    arch_folder = Path(f"container_definitions/{arch}/")
+    for df in arch_folder.glob(f"*.yaml"):
+        logger.debug(f"Reading file {df.name}")
         with open(df, "r") as fp:
-            yield yaml.load(fp)
+            yield df.stem, yaml.load(fp)
 
 
-def parse_container_definitions(arch):
+def process_spack_yaml(
+    container_name: str, container_definition: Dict, architecture: str
+) -> None:
     """
-    Loop through the container definitions and collect all specs and package restrictions
-    """
-    logger.debug(f"Parsing container definitions for {arch}")
-    specs = []
-    package_restrictions = {}
-    for container_definition in read_container_definitions(arch):
-        specs.extend(container_definition["spack"]["specs"])
-        logger.debug(f"Found specs: {container_definition['spack']['specs']}")
-        if packages := container_definition["spack"].get("packages"):
-            logger.debug(
-                f"Found package restrictions: {container_definition['spack']['packages']}"
-            )
-            merge_dicts(package_restrictions, packages)
-
-    return specs, package_restrictions
-
-
-def process_spack_yaml(specs, package_restrictions, architecture):
-    """
-    Create the spack.yaml file that will contain all specs and requirements to build all
-    containers.
+    Create the full spack.yaml needed to build a container
     """
     yaml = YAML(typ="safe", pure=True)
     with open("spack.yaml", "r") as fp:
         spack = yaml.load(fp)
 
-    spack["spack"]["specs"] = specs
-    merge_dicts(spack, {"spack": {"packages": package_restrictions}})
+    spack["spack"]["specs"] = container_definition["spack"]["specs"]
+    if package_restrictions := container_definition["spack"].get("packages"):
+        merge_dicts(spack, {"spack": {"packages": package_restrictions}})
 
     for section in spack["spack"]["ci"]["pipeline-gen"]:
-        for key in section.keys():
+        for key in section:
             section[key]["tags"] = [architecture_map[architecture]["tag"]]
             section[key]["image"] = builder_image()
             section[key]["image"]["entrypoint"] = [""]
@@ -76,7 +62,7 @@ def process_spack_yaml(specs, package_restrictions, architecture):
     yaml = YAML()
     yaml.indent(mapping=2, sequence=4, offset=2)
     yaml.width = 120
-    with open(f"merged_spack_{architecture}.yaml", "w") as fp:
+    with open(f"merged_spack_{container_name}_{architecture}.yaml", "w") as fp:
         yaml.dump(spack, fp)
 
 
@@ -98,7 +84,7 @@ def builder_image():
     return image
 
 
-def generate_process_spack_jobs(architectures):
+def generate_process_spack_jobs(architectures, cache_population_job_names):
     """
     Generate the job that will process the spack-produced jobs
     """
@@ -109,15 +95,16 @@ def generate_process_spack_jobs(architectures):
             architecture=architecture,
             **copy.deepcopy(process_spack_pipeline_yaml),
         )
-        job.needs.append(
-            {
-                "job": f"generate build cache population job for {architecture}",
-                "artifacts": True,
-            },
-        )
+        for job_name in cache_population_job_names[architecture]:
+            job.needs.append(
+                {
+                    "job": job_name,
+                    "artifacts": True,
+                },
+            )
         job.variables.update(
             {
-                "SPACK_GENERATED_PIPELINE": f"jobs_scratch_dir.{architecture}/pipeline.yml",
+                "SPACK_PIPELINES_ARCH_DIR": f"jobs_scratch_dir.{architecture}",
                 "OUTPUT_DIR": f"artifacts.{architecture}",
             }
         )
@@ -132,50 +119,63 @@ def generate_packages_workflow(architectures):
     """
     logger.info("Generating packages jobs")
     workflow = Workflow()
+    cache_population_job_names = {arch: [] for arch in architectures}
 
     for architecture in architectures:
         logger.info(
-            f"Generating generate build cache population job for {architecture}"
+            f"Generating generate build cache population jobs for {architecture}"
         )
-        packages_job = Job(
-            "generate build cache population job",
-            architecture=architecture,
-            **copy.deepcopy(packages_yaml),
-        )
-        logger.debug("Adding build cache-related variables")
-        packages_job.variables["SPACK_BUILD_CACHE_BUCKET"] = architecture_map[
+        for container_name, container_definition in read_container_definitions(
             architecture
-        ]["cache_bucket"]["name"]
-        packages_job.variables[
-            "ENV_DIR"
-        ] = f"${{CI_PROJECT_DIR}}/jobs_scratch_dir.{architecture}"
-        packages_job.variables.update(
-            architecture_map[architecture].get("variables", {})
-        )
-        logger.debug("Adding tags, image and needs")
-        packages_job.image = builder_image()
-        packages_job.needs.append(
-            {
-                "pipeline": os.environ.get("CI_PIPELINE_ID"),
-                "job": "generate base pipeline",
-                "artifacts": True,
-            }
-        )
-        logger.debug("Keypair variables")
-        packages_job.add_spack_mirror()
-        packages_job.set_aws_variables()
+        ):
+            logger.info(
+                f"Generating generate build cache population job for {container_name}"
+            )
+            packages_job = Job(
+                f"generate build cache population job for {container_name}",
+                architecture=architecture,
+                **copy.deepcopy(packages_yaml),
+            )
+            cache_population_job_names[architecture].append(packages_job.name)
+            logger.debug("Adding build cache-related variables")
+            packages_job.variables["SPACK_BUILD_CACHE_BUCKET"] = architecture_map[
+                architecture
+            ]["cache_bucket"]["name"]
+            packages_job.variables[
+                "ENV_DIR"
+            ] = f"${{CI_PROJECT_DIR}}/jobs_scratch_dir.{architecture}/{container_name}/"
+            packages_job.variables["CONTAINER_NAME"] = container_name
+            packages_job.variables.update(
+                architecture_map[architecture].get("variables", {})
+            )
+            logger.debug("Adding tags, image and needs")
+            packages_job.image = builder_image()
+            packages_job.needs.append(
+                {
+                    "pipeline": os.environ.get("CI_PIPELINE_ID"),
+                    "job": "generate base pipeline",
+                    "artifacts": True,
+                }
+            )
+            logger.debug("Keypair variables")
+            packages_job.add_spack_mirror()
+            packages_job.set_aws_variables()
 
-        logger.debug(f"Renaming merged_spack_{architecture}.yaml")
-        packages_job.update_before_script(
-            f"mv merged_spack_{architecture}.yaml spack.yaml", append=True
-        )
-        logger.debug("Getting needed specs")
-        specs, package_restrictions = parse_container_definitions(architecture)
-        logger.debug("Processing spack.yaml")
-        process_spack_yaml(specs, package_restrictions, architecture)
-        workflow.add_job(packages_job)
+            logger.debug(f"Adding rename merged_spack_{architecture}.yaml command")
+            packages_job.update_before_script(
+                f"mv merged_spack_{container_name}_{architecture}.yaml spack.yaml",
+                append=True,
+            )
+            logger.debug("Generating spack.yaml for containers")
+            logger.debug(f"{container_name} definition: {container_definition}")
+            process_spack_yaml(
+                container_name,
+                container_definition,
+                architecture,
+            )
+            workflow.add_job(packages_job)
 
     logger.debug("Generating job to process spack-generated yaml")
-    workflow += generate_process_spack_jobs(architectures)
+    workflow += generate_process_spack_jobs(architectures, cache_population_job_names)
 
-    return workflow
+    return workflow, cache_population_job_names
