@@ -187,6 +187,7 @@ cleanup deleted branch containers from the bucket:
     -     container_branch=$(echo $container | awk -F'__' '{print $3}')
     -     if [[ -z "${container_branch}" ]] || [[ ${container_branch} == *.sif ]] ; then
     -         echo "no branch for ${container} - skipping"
+    -         continue
     -     fi
     -     echo "Container ${container} was built with branch ${container_branch}"
     -     if [[ ! " ${branches[*]} " =~ " ${container_branch} " ]]; then
