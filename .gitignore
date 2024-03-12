@@ -4,3 +4,9 @@
 generated_pipeline.yaml
 spack
 __pycache__
+artifacts
+build
+venv
+merged_*
+processed_*
+sandbox

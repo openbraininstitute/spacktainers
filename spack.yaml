@@ -39,7 +39,7 @@ spack:
         - spack -d ci rebuild
     - reindex-job:
         image:
-          name: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:2024.02.14-bsd-426-architectures
+          name: bbpgitlab.epfl.ch:5050/hpc/spacktainers/builder:2024.02.14-bsd-426-architectures
           pull_policy: always
         before_script:
         - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf
@@ -51,7 +51,7 @@ spack:
         - spack gpg trust "$SPACK_DEPLOYMENT_KEY_PRIVATE"
     - cleanup-job:
         image:
-          name: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:2024.02.14-bsd-426-architectures
+          name: bbpgitlab.epfl.ch:5050/hpc/spacktainers/builder:2024.02.14-bsd-426-architectures
           pull_policy: always
         before_script:
         - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf

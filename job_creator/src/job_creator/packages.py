@@ -77,7 +77,7 @@ def builder_image():
         today = datetime.strftime(datetime.today(), "%Y.%m.%d")
         image_tag = f"{today}-{current_branch}"
     image = {
-        "name": f"bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:{image_tag}",
+        "name": f"bbpgitlab.epfl.ch:5050/hpc/spacktainers/builder:{image_tag}",
         "pull_policy": "always",
     }
 

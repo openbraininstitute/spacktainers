@@ -50,7 +50,7 @@ class BaseContainer:
         name,
         build_path,
         architectures="amd64",
-        registry="bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/",
+        registry="bbpgitlab.epfl.ch:5050/hpc/spacktainers/",
     ):
         self.name = name
         self.job_name = f"build {self.name}"
@@ -414,7 +414,7 @@ class Spackah(BaseContainer):
         name,
         architecture,
         out_dir,
-        registry="bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/",
+        registry="bbpgitlab.epfl.ch:5050/hpc/spacktainers/",
     ):
         self.name = name
         self.architectures = [architecture]
@@ -579,8 +579,8 @@ class Spackah(BaseContainer):
 
         dockerfile = Path(f"{build_path}/Dockerfile")
         dockerfile_lines = [
-            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder:{builder_image_tag} AS builder",
-            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/runtime:{builder_image_tag}",
+            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainers/builder:{builder_image_tag} AS builder",
+            f"FROM bbpgitlab.epfl.ch:5050/hpc/spacktainers/runtime:{builder_image_tag}",
             "# Triggers building the 'builder' image, otherwise it is optimized away",
             "COPY --from=builder /etc/debian_version /etc/debian_version",
         ]
@@ -628,9 +628,9 @@ class Spackah(BaseContainer):
         create_sif_job.variables["BUCKET"] = bucket["name"]
         create_sif_job.variables[
             "S3_CONTAINER_PATH"
-        ] = f"s3://{bucket['name']}/containers/spacktainerizah/{self.container_filename}"
+        ] = f"s3://{bucket['name']}/containers/{self.container_filename}"
 
-        create_sif_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:{singularity_image_tag}"
+        create_sif_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainers/singularitah:{singularity_image_tag}"
         create_sif_job.configure_s3cmd()
 
         return create_sif_job
@@ -658,7 +658,7 @@ class Spackah(BaseContainer):
         job = Job(
             f"download {self.name} SIF to bb5", **copy.deepcopy(bb5_download_sif_yaml)
         )
-        sif_root = Path("/gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainerizah")
+        sif_root = Path("/gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainers")
         sif_file = sif_root / self.container_filename
         job.variables["BUCKET"] = architecture_map[self.architecture][
             "containers_bucket"
@@ -795,7 +795,7 @@ class Spackah(BaseContainer):
         try:
             object_info = s3.head_object(
                 Bucket=bucket["name"],
-                Key=f"containers/spacktainerizah/{self.container_filename}",
+                Key=f"containers/{self.container_filename}",
             )
             bucket_container_checksum = object_info["ResponseMetadata"][
                 "HTTPHeaders"
@@ -972,7 +972,7 @@ class CustomContainer(BaseContainer):
         try:
             object_info = s3.head_object(
                 Bucket=bucket["name"],
-                Key=f"containers/spacktainerizah/{self.container_filename}",
+                Key=f"containers/{self.container_filename}",
             )
             bucket_checksum = object_info["ResponseMetadata"]["HTTPHeaders"][
                 "x-amz-meta-digest"
@@ -1012,9 +1012,9 @@ class CustomContainer(BaseContainer):
             build_job.variables["SOURCE_DIGEST"] = self.source_container_checksum
             build_job.variables[
                 "S3_CONTAINER_PATH"
-            ] = f"s3://{bucket_name}/containers/spacktainerizah/{self.container_filename}"
+            ] = f"s3://{bucket_name}/containers/{self.container_filename}"
             build_job.configure_s3cmd()
-            build_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:{singularity_image_tag}"
+            build_job.image = f"bbpgitlab.epfl.ch:5050/hpc/spacktainers/singularitah:{singularity_image_tag}"
 
             workflow.add_job(build_job)
 

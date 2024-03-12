@@ -72,13 +72,13 @@ gather child artifacts:
     - pip install --upgrade pip setuptools
     - pip install -e ./get_artifacts
     - ga -P ${CI_PIPELINE_ID} -t ${GITLAB_API_TOKEN}
-    - for zipfile in $(ls spack.artifacts*zip); do
+    - for zipfile in spack.artifacts*zip; do
     -    unzip ${zipfile} -d ${zipfile%%.zip}
     -    rm -f ${zipfile}
     -    architecture=$(echo ${zipfile##spack.artifacts.} | sed 's/.zip//')
     -    echo ${architecture}=yes >> build.env
     - done
-    - for zipfile in $(ls spacktainer.artifacts*zip); do
+    - for zipfile in spacktainer.artifacts*zip; do
     -    unzip ${zipfile} -d ${zipfile%%.zip}
     -    rm -f ${zipfile}
     - done
@@ -167,7 +167,7 @@ test spackitor:
 
 cleanup deleted branch containers from the bucket:
   stage: cleanup
-  image: bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah:latest
+  image: bbpgitlab.epfl.ch:5050/hpc/spacktainers/singularitah:latest
   extends: .no-merge-request-rules
   before_script:
     - sed -i 's/^access_key.*/access_key='${AWS_INFRASTRUCTURE_ACCESS_KEY_ID}'/' /root/.s3cfg
@@ -183,13 +183,13 @@ cleanup deleted branch containers from the bucket:
     - git branch -r | sed 's|origin/||'
     - branches=($(git branch -r | sed 's|origin/||' | awk '{print $NF}'))
     - echo "Existing branches are ${branches[*]}"
-    - for container in $(s3cmd ls s3://sboinfrastructureassets/containers/spacktainerizah/ | awk '{print $4}'); do
+    - for container in $(s3cmd ls s3://sboinfrastructureassets/containers/ | awk '{print $4}'); do
     -     container_branch=$(echo $container | awk -F'__' '{print $3}')
-    -     if [[ -z "${container_branch}" ]] || [[ ${container_branch} == *.sif ]] ; then
+    -     echo "Container ${container} was built with branch ${container_branch}"
+    -     if [[ -z "${container_branch}" ]] ; then
     -         echo "no branch for ${container} - skipping"
     -         continue
     -     fi
-    -     echo "Container ${container} was built with branch ${container_branch}"
     -     if [[ ! " ${branches[*]} " =~ " ${container_branch} " ]]; then
     -         echo "${container_branch} not found in existing branches"
     -         s3cmd rm ${container}
@@ -202,7 +202,7 @@ cleanup deleted branch containers from bb5:
   stage: cleanup
   tags: [bb5_map]
   variables:
-    CONTAINER_ROOT: /gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainerizah
+    CONTAINER_ROOT: /gpfs/bbp.cscs.ch/ssd/containers/hpc/spacktainers
   extends: .no-merge-request-rules
   script:
     - module load unstable git
@@ -211,14 +211,15 @@ cleanup deleted branch containers from bb5:
     - branches=($(git branch -r | sed 's|origin/||' | awk '{print $NF}'))
     - echo "Existing branches are ${branches[*]}"
     - for container in $(ls ${CONTAINER_ROOT}); do
-    -     container_branch=$(echo $container | awk -F'__' '{print $3}')
-    -     if [[ -z "${container_branch}" ]] || [[ ${container_branch} == *.sif ]] ; then
+    -     container_branch=$(echo $container | awk -F'__' '{print $3}' | sed 's/.sif//')
+    -     echo "Checking container ${container} with branch ${container_branch}"
+    -     if [[ -z "${container_branch}" ]] ; then
     -         echo "no branch for ${container} - skipping"
+    -         continue
     -     fi
-    -     echo "Container ${container} was built with branch ${container_branch}"
     -     if [[ ! " ${branches[*]} " =~ " ${container_branch} " ]]; then
     -         echo "${container_branch} not found in existing branches"
-    -         rm -f ${CONTAINER_ROOT}/${container}.sif
+    -         rm -f ${CONTAINER_ROOT}/${container}
     -     else
     -         echo "The branch still exists, it can stay"
     -     fi

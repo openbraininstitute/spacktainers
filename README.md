@@ -1,4 +1,4 @@
-# Spacktainerizah
+# Spacktainers
 
 
 ## Containers Built With Spack Packages
@@ -89,9 +89,9 @@ While the pipeline is organised in stages, jobs jump the queue wherever they can
 
 ## Base containers
 
-* [Singularitah](bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/singularitah)
-* [Builder](bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/builder)
-* [Runner](bbpgitlab.epfl.ch:5050/hpc/spacktainerizah/runtime)
+* [Singularitah](bbpgitlab.epfl.ch:5050/hpc/spacktainers/singularitah)
+* [Builder](bbpgitlab.epfl.ch:5050/hpc/spacktainers/builder)
+* [Runner](bbpgitlab.epfl.ch:5050/hpc/spacktainers/runtime)
 
 ## Repository layout
 
