@@ -260,7 +260,7 @@ docker_hub_push_yaml = {
         "echo podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
         "podman image list",
         "echo Pushing, possibly twice because podman sometimes fails on the first attempt",
-        "podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG} || podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
+        "podman push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG} || podman --log-level=debug push ${CONTAINER_NAME}:${REGISTRY_IMAGE_TAG} docker://docker.io/bluebrain/${HUB_REPO_NAME}:${REGISTRY_IMAGE_TAG}",
     ],
     **parent_pipeline_rule,
 }
