@@ -45,7 +45,7 @@ buildah_build_yaml = {
 }
 
 multiarch_yaml = {
-    "image": "ubuntu:latest",
+    "image": "ubuntu:22.04",
     "stage": "base containers multiarch",
     "script": [
         "apt-get update && apt-get install -y podman",
@@ -94,7 +94,7 @@ packages_yaml = {
 }
 
 process_spack_pipeline_yaml = {
-    "image": "ubuntu:latest",
+    "image": "ubuntu:22.04",
     "stage": "process spack-generated pipelines",
     "script": [
         "apt-get update && apt-get install -y ca-certificates git python3 python3-pip",
@@ -247,7 +247,7 @@ build_custom_containers_yaml = {
 
 docker_hub_push_yaml = {
     "stage": "push to docker hub",
-    "image": "ubuntu:latest",
+    "image": "ubuntu:22.04",
     "variables": {
         "timeout": "4h",
     },
