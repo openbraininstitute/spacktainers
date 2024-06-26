@@ -2,6 +2,7 @@ import copy
 import glob
 import hashlib
 import json
+import re
 import logging
 import logging.config
 import os
@@ -500,10 +501,11 @@ class Spackah(BaseContainer):
 
         logger.debug(f"Looking for package {package_name}")
         logger.debug(f"Roots: {spack_lock['roots']}")
+        name_from_spec = re.compile(r"^\s*([\w-]*)")
         spack_hash = next(
             root
             for root in spack_lock["roots"]
-            if root["spec"].split("~")[0].split("+")[0] == package_name
+            if re.match(name_from_spec, root["spec"])[1] == package_name
         )["hash"]
         package_version = spack_lock["concrete_specs"][spack_hash]["version"]
 
