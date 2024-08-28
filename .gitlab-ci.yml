@@ -15,6 +15,7 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"
+
 stages:
   - unit tests
   - generate
@@ -22,8 +23,10 @@ stages:
   - build cache
   - build spacktainer containers
   - cleanup
+
 variables:
   SPACK_BRANCH: develop
+
 generate base pipeline:
   image: ubuntu:22.04
   stage: generate
@@ -36,8 +39,7 @@ generate base pipeline:
       skopeo
     - pip install --upgrade pip setuptools
     - pip install -e ./job_creator
-    - jc create-jobs --singularity-version ${SINGULARITY_VERSION} --s3cmd-version
-      ${S3CMD_VERSION}
+    - jc create-jobs --singularity-version ${SINGULARITY_VERSION} --s3cmd-version ${S3CMD_VERSION}
   artifacts:
     when: always
     paths:
@@ -97,6 +99,9 @@ populate buildcache for amd64:
     strategy: depend
   extends: .rules
 populate buildcache for arm64:
+  rules:
+    - exists:
+      - container_definitions/arm64
   stage: build cache
   needs:
     - job: gather child artifacts
@@ -120,6 +125,9 @@ build spacktainers for amd64:
     strategy: depend
   extends: .rules
 build spacktainers for arm64:
+  rules:
+    - exists:
+      - container_definitions/arm64
   stage: build spacktainer containers
   needs:
     - job: gather child artifacts

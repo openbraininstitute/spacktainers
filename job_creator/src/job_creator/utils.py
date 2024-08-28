@@ -1,8 +1,7 @@
-import glob
 import json
 import logging
 import logging.config
-import os
+from pathlib import Path
 
 import requests
 import ruamel.yaml
@@ -70,7 +69,7 @@ def get_architectures():
     Retrieve the architectures that need to be built based on the container definitions
     """
     architectures = [
-        os.path.basename(archdir) for archdir in glob.glob("container_definitions/*")
+        archdir.name for archdir in Path("container_definitions").glob("[!_]*")
     ]
 
     return architectures

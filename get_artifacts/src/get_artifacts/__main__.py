@@ -1,6 +1,7 @@
 import glob
 import logging
 import os
+from pathlib import Path
 from pprint import pformat
 
 import click
@@ -103,7 +104,7 @@ def get_artifacts(parent_pipeline, private_token):
     jobs = session.get(jobs_url(base_url, project_id, run_pipeline["id"])).json()
     logger.debug(f"Jobs: {pformat(jobs)}")
     for architecture in [
-        os.path.basename(archdir) for archdir in glob.glob("container_definitions/*")
+        archdir.name for archdir in Path("container_definitions").glob("[!_]*")
     ]:
         logger.info(f"Architecture: {architecture}")
         process_job = next(
