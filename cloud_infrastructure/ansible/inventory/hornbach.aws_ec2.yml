@@ -1,0 +1,17 @@
+plugin: aws_ec2
+regions:
+  - us-east-1
+filters:
+  tag:gitlab_node_prefix: hornbach
+keyed_groups:
+  - key: tags.gitlab_node_type
+    separator: ''
+  - key: tags.gitlab_node_level
+    separator: ''
+hostnames:
+  # List host by name instead of the default public ip
+  - tag:Name
+compose:
+  # Use the public IP address to connect to the host
+  # (note: this does not modify inventory_hostname, which is set via I(hostnames))
+  ansible_host: public_ip_address

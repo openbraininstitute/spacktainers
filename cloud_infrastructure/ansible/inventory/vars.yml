@@ -1,0 +1,25 @@
+all:
+  vars:
+    # Ansible Settings
+    ansible_user: "ubuntu"
+    ansible_ssh_private_key_file: "{{ lookup('env', 'PWD') }}/../keys/hornbach"
+
+    # Cloud Settings, available options: gcp, aws, azure
+    cloud_provider: "aws"
+
+    # AWS only settings
+    aws_region: "us-east-1"
+
+    # General Settings
+    prefix: "hornbach"
+
+    # Passwords / Secrets (Replace values accordingly)
+    gitlab_root_password: 'da_shite_1'
+    postgres_password: 'da_shite_1'
+    consul_database_password: 'da_shite_1'
+    gitaly_token: 'da_shite_1'
+    pgbouncer_password: 'da_shite_1'
+    redis_password: 'da_shite_1'
+    praefect_external_token: 'da_shite_1'
+    praefect_internal_token: 'da_shite_1'
+    praefect_postgres_password: 'da_shite_1'

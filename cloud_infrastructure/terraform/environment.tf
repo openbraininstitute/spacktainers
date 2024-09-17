@@ -36,7 +36,7 @@ resource "aws_vpc_security_group_ingress_rule" "external_gitlab_vm_https_access"
   for_each = {
     for item in flatten([
       for block in var.epfl_cidr_blocks : [
-        for port in [80, 443, 8443] : {
+        for port in [80] : {  # , 443, 8443] : {
           block = block
           port  = port
         }
@@ -58,6 +58,12 @@ resource "aws_vpc_security_group_ingress_rule" "external_gitlab_vm_https_access"
   tags = {
     Name = "${var.prefix}-vm-https-${each.key}"
   }
+}
+
+resource "local_file" "public_ip" {
+  filename = "../ansible/inventory/tf_vars.yml"
+  file_permission = "0666"
+  content = yamlencode({"all": {"vars": {"external_url": "http://${module.gitlab_ref_arch_aws.gitlab_rails.external_addresses[0]}"}}})
 }
 
 output "gitlab_ref_arch_aws" {

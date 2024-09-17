@@ -1,0 +1,11 @@
+- hosts: localhost
+  tasks:
+  - name: Clone Gitlab Environment Toolkit
+    ansible.builtin.git:
+      repo: https://gitlab.com/gitlab-org/gitlab-environment-toolkit.git
+      dest: /tmp/get.git
+      depth: 1
+      single_branch: yes
+
+- name: Run the GET playbook
+  ansible.builtin.import_playbook: /tmp/get.git/ansible/playbooks/all.yml
