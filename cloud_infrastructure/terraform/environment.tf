@@ -33,16 +33,27 @@ resource "aws_security_group" "external_gitlab_vm_https_access" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "external_gitlab_vm_https_access" {
-  for_each = toset(var.epfl_cidr_blocks)
+  for_each = {
+    for item in flatten([
+      for block in var.epfl_cidr_blocks : [
+        for port in [80, 443, 8443] : {
+          block = block
+          port  = port
+        }
+      ]
+    ])
+    : "${item.block}:${item.port}" => item
+  }
+  #  toset(var.epfl_cidr_blocks)
 
   security_group_id = aws_security_group.external_gitlab_vm_https_access.id
 
-  description = "External HTTPS access for VMs from CIDR block ${each.key}"
-  from_port   = 443
-  to_port     = 443
+  description = "External HTTP(S) access for VMs from CIDR block ${each.key}"
+  from_port   = each.value.port
+  to_port     = each.value.port
   ip_protocol = "tcp"
 
-  cidr_ipv4 = each.key
+  cidr_ipv4 = each.value.block
 
   tags = {
     Name = "${var.prefix}-vm-https-${each.key}"
