@@ -128,3 +128,12 @@ The main entrypoints can be found, unsurprisingly, in the `__main__.py` file. Th
 `spack_template.py` contains the spack.yaml template that will be merged with the user's container config to generate the spack.yaml that will be used to build the container
 
 `utils.py` contains utility functions for reading/writing yaml, getting the multiarch job for a container, ...
+
+# Acknowledgment
+
+The development of this software was supported by funding to the Blue Brain Project,
+a research center of the École polytechnique fédérale de Lausanne (EPFL),
+from the Swiss government's ETH Board of the Swiss Federal Institutes of Technology.
+
+Copyright (c) 2005-2024 Blue Brain Project/EPFL
+
