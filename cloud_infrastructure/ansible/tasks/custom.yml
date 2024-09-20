@@ -1,0 +1,23 @@
+- name: Set root access token
+  command: |
+    gitlab-rails runner "
+      t = User.first.personal_access_tokens.first or User.personal_access_tokens.create
+      t.name = 'TF access token'
+      t.scopes = ['api']
+      t.expires_at = '2025-02-25'
+      t.set_token('{{ gitlab_root_access_token }}')
+      t.save!
+    "
+  delegate_to: "{{ groups['gitlab_rails'][0] }}"
+  delegate_facts: true
+  become: true
+
+- name: Enable SSH import, disable sign up
+  command: |
+    gitlab-rails runner "
+      Settings['gitlab']['import_sources'] = ['ssh']
+      Settings['gitlab']['signup_enabled'] = false
+    "
+  delegate_to: "{{ groups['gitlab_rails'][0] }}"
+  delegate_facts: true
+  become: true

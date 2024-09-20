@@ -23,3 +23,10 @@ all:
     praefect_external_token: 'da_shite_1'
     praefect_internal_token: 'da_shite_1'
     praefect_postgres_password: 'da_shite_1'
+
+    # To sync with terraform: can only be used in OAUTH when 20 characters long. Also
+    # probably needs the type prefix `glpat-` for Personal Access Token.
+    gitlab_root_access_token: 'glpat-JcJvGZET3QzNpHjAka_G'
+
+    # Our customization
+    post_configure_custom_tasks_file: "{{ lookup('env', 'PWD') }}/tasks/custom.yml"
