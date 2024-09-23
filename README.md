@@ -45,13 +45,13 @@ spacktainer:
 
 # Developer documentation
 
-## Components And Their Original Repositories
+## Components
 
-* [Spacktainerizer](https://bbpgitlab.epfl.ch/hpc/spacktainerizer/): the base image which contains our spack fork
-* [Singularitah](https://bbpgitlab.epfl.ch/hpc/personal/heeren/singularitah): arm64 container with singularity and s3cmd installation for sif manipulation on arm nodes
-* [Spack-cacher](https://bbpgitlab.epfl.ch/hpc/spack-cacher): builds spack packages and puts them in a build cache
-* [Spackitor](https://bbpgitlab.epfl.ch/hpc/spackitor): cleans the build cache: anything that is too old or no longer used gets removed
-* [Spackah](https://bbpgitlab.epfl.ch/hpc/spackah): builds the actual containers
+* Spacktainerizer: the base image which contains our spack fork
+* Singularitah: arm64 container with singularity and s3cmd installation for sif manipulation on arm nodes
+* Spack-cacher: builds spack packages and puts them in a build cache
+* Spackitor: cleans the build cache: anything that is too old or no longer used gets removed
+* Spackah: builds the actual containers
 
 ## Build Order
 
@@ -128,3 +128,12 @@ The main entrypoints can be found, unsurprisingly, in the `__main__.py` file. Th
 `spack_template.py` contains the spack.yaml template that will be merged with the user's container config to generate the spack.yaml that will be used to build the container
 
 `utils.py` contains utility functions for reading/writing yaml, getting the multiarch job for a container, ...
+
+# Acknowledgment
+
+The development of this software was supported by funding to the Blue Brain Project,
+a research center of the École polytechnique fédérale de Lausanne (EPFL),
+from the Swiss government's ETH Board of the Swiss Federal Institutes of Technology.
+
+Copyright (c) 2023-2024 Blue Brain Project/EPFL
+
