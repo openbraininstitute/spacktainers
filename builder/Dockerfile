@@ -6,10 +6,11 @@ FROM $BASE_IMAGE as bootstrap
 
 ENV SPACK_ROOT=/opt/spack \
     CURRENTLY_BUILDING_DOCKER_IMAGE=1 \
-    container=docker
+    container=docker \
+    PATH=/opt/spack/bin:$PATH
 
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update \
- && apt-get install -y build-essential curl environment-modules file gfortran git python3 python3-boto3 rpm unzip
+    && apt-get install -y build-essential curl environment-modules file gfortran git python3 python3-boto3 rpm unzip
 
 # Yes, again. Line 1 by itself is not enough to export this ARG into the shell in RUN
 ARG BASE_IMAGE
@@ -21,42 +22,42 @@ ARG CACHE_BUCKET
 ARG SPACK_BRANCH
 
 RUN if [ "$BASE_IMAGE" = "ubuntu:20.04" ]; then echo "Skipping gcc-12 for $BASE_IMAGE"; \
- else export DEBIAN_FRONTEND=noninteractive && apt-get install -y gcc-12 g++-12 gfortran-12; fi
+    else export DEBIAN_FRONTEND=noninteractive && apt-get install -y gcc-12 g++-12 gfortran-12; fi
 
 
 SHELL ["/bin/bash", "--login", "-c"]
 
 RUN echo "Cloning spack branch $SPACK_BRANCH"
 RUN mkdir $SPACK_ROOT && cd $SPACK_ROOT \
- && git clone --single-branch --branch $SPACK_BRANCH https://github.com/BlueBrain/spack.git . \
- && mkdir -p $SPACK_ROOT/opt/spack
+    && git clone --single-branch --branch $SPACK_BRANCH https://github.com/BlueBrain/spack.git . \
+    && mkdir -p $SPACK_ROOT/opt/spack
 
 RUN ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
-          /usr/local/bin/docker-shell \
- && ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
-          /usr/local/bin/interactive-shell \
- && ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
-          /usr/local/bin/spack-env
+    /usr/local/bin/docker-shell \
+    && ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
+    /usr/local/bin/interactive-shell \
+    && ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
+    /usr/local/bin/spack-env
 
 RUN cp $SPACK_ROOT/share/spack/docker/modules.yaml \
-        $SPACK_ROOT/etc/spack/modules.yaml \
- && cp $SPACK_ROOT/bluebrain/sysconfig/containers/packages.yaml \
-        $SPACK_ROOT/etc/spack/packages.yaml \
- && rm -rf /root/*.* /run/nologin $SPACK_ROOT/.git
+    $SPACK_ROOT/etc/spack/modules.yaml \
+    && cp $SPACK_ROOT/bluebrain/sysconfig/containers/packages.yaml \
+    $SPACK_ROOT/etc/spack/packages.yaml \
+    && rm -rf /root/*.* /run/nologin $SPACK_ROOT/.git
 
 # [WORKAROUND]
 # https://superuser.com/questions/1241548/
 #     xubuntu-16-04-ttyname-failed-inappropriate-ioctl-for-device#1253889
 RUN [ -f ~/.profile ]                                               \
- && sed -i 's/mesg n/( tty -s \\&\\& mesg n || true )/g' ~/.profile \
- || true
+    && sed -i 's/mesg n/( tty -s \\&\\& mesg n || true )/g' ~/.profile \
+    || true
 
 WORKDIR /root
 SHELL ["docker-shell"]
 
 # Creates the package cache
 RUN spack compiler find --scope=site \
- && spack compiler list
+    && spack compiler list
 # OpenGL cannot be build by Spack
 RUN spack external find --scope=site opengl
 
@@ -66,9 +67,9 @@ RUN spack external find --scope=site opengl
 
 # Add in an external ISPC for the Viz team
 RUN cd /opt \
- && curl -L https://github.com/ispc/ispc/releases/download/v1.18.0/ispc-v1.18.0-linux.tar.gz|tar xzf - \
- && rm -rf /opt/ispc-v1.18.0-linux/{examples,css,*.html} \
- && spack external find --scope=site -p /opt/ispc-v1.18.0-linux ispc
+    && curl -L https://github.com/ispc/ispc/releases/download/v1.18.0/ispc-v1.18.0-linux.tar.gz|tar xzf - \
+    && rm -rf /opt/ispc-v1.18.0-linux/{examples,css,*.html} \
+    && spack external find --scope=site -p /opt/ispc-v1.18.0-linux ispc
 
 # This will list any missing packages that should be installed via apt.
 RUN spack bootstrap now
@@ -114,22 +115,22 @@ ONBUILD RUN spack config blame mirrors
 
 # Install the software, remove unnecessary deps
 ONBUILD RUN cd /opt/spack-environment && \
-            spack env activate . && \
-            spack concretize && \
-            spack install --fail-fast && \
-            spack gc -y
+    spack env activate . && \
+    spack concretize && \
+    spack install --fail-fast && \
+    spack gc -y
 
 ONBUILD RUN if [ -n "${MIRROR_URL}" ]; then spack mirror rm build_s3; fi
 # Strip all the binaries
 ONBUILD RUN find -L /opt/view/* -type f -exec readlink -f '{}' \; | \
-            xargs file -i | \
-            grep 'charset=binary' | \
-            grep 'x-executable\|x-archive\|x-sharedlib' | \
-            awk -F: '{print $1}' | xargs strip -s
+    xargs file -i | \
+    grep 'charset=binary' | \
+    grep 'x-executable\|x-archive\|x-sharedlib' | \
+    awk -F: '{print $1}' | xargs strip -s
 
 # Modifications to the environment that are necessary to run
 ONBUILD RUN cd /opt/spack-environment && \
-            spack env activate --sh -d . >> /etc/profile.d/z10_spack_environment.sh
+    spack env activate --sh -d . >> /etc/profile.d/z10_spack_environment.sh
 
 # Singularity by default sets the LD_LIBRARY_PATH to /.singularity.d/libs that includes
 # libraries mounted from the host system. Since spack when enabling the environment might
