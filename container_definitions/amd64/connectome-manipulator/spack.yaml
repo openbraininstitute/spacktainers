@@ -1,0 +1,12 @@
+spack:
+  specs:
+    - parquet-converters
+    - py-connectome-manipulator
+  packages:
+    py-pandas:
+      require: "~performance"  # Otherwise pulls in numba that requires outdated LLVM
+    py-numpy-quaternion:
+      require: "~numba~scipy"  # See above, get around Numba
+    all:
+      providers:
+        mpi: [mpich]

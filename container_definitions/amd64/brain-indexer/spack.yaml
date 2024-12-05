@@ -1,0 +1,9 @@
+---
+spack:
+  specs: [py-brain-indexer+mpi]
+  packages:
+    py-numpy-quaternion:
+      require: "~numba~scipy"
+    all:
+      providers:
+        mpi: [mpich]

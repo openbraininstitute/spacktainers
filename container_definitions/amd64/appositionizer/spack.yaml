@@ -1,0 +1,7 @@
+spack:
+  specs:
+    - appositionizer
+  packages:
+    all:
+      providers:
+        mpi: [mpich]
