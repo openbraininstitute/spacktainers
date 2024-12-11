@@ -15,29 +15,6 @@ The only files you should have to edit as an end-user are located in the `contai
 
 In both cases, the filename will be used as the name of your container. In case of a YAML file, the container version will be derived from the first package in your spec. In case of a def file, the version will be the same as the tag on docker hub.
 
-## Adding extra files to your containers
-
-Create a folder under `spacktainer/files` to hold your container's files. Make sure to use your container's name to keep everything somewhat orderly.
-In your container definition file, add a `spacktainer` section with a `files` key. This key holds a list of `source:target` filepairs (note that there is no space between source and target!)
-Source is specified starting from the level below `spacktainer`; in the example below the folder structure would look like this:
-```
-spacktainer/files
-└── my-awesome-container
-    ├── some_folder
-    │   ├── brilliant_hack.patch
-    │   ├── readme.txt
-    │   ├── ugly_hack.patch
-    │   └── useless_but_if_we_delete_it_everything_breaks.jpg
-    └── script.sh
-
-```
-
-```
-spack:
-  specs:
-    - my-awesome-package
-```
-
 # Developer documentation
 
 ## Build Order
@@ -65,26 +42,6 @@ Folders of note are:
 * builder: base container that contains our spack fork, needed to build the software that will be in the spacktainer
 * container_definitions: this is where users will define their containers
 * runtime: base container that contains everything needed to run the spack-built environment
-
-## job_creator
-
-The main entrypoints can be found, unsurprisingly, in the `__main__.py` file. This is where the `click` commands are defined.
-
-`architectures.py` contains the configuration for different architectures: what bucket should be used for the Spack package cache, which tag should be applied for the gitlab jobs, in which variables is the authentication defined, etc
-
-`ci_objects.py` contains helper object that can be used to define gitlab jobs and workflows. These will take care of architecture-specific behaviour (such as setting/unsetting the proxy, setting AWS variables, ...)
-
-`containers.py` holds everything related to generating container jobs: classes that define the base containers (former Spacktainerizer, Singularitah) as well as the spacktainers (formerly Spackah) and custom containers. It also contains the methods that use these classes and return a workflow with only the required jobs.
-
-`job_templates.py` holds job definition templates as python dictionaries.
-
-`logging_config.py` should be self-explanatory
-
-`packages.py` holds everything related to package-building jobs. Here you'll find the methods that generate the workflows for building the job that runs `spack ci generate` as well as the job that processes the output.
-
-`spack_template.py` contains the spack.yaml template that will be merged with the user's container config to generate the spack.yaml that will be used to build the container
-
-`utils.py` contains utility functions for reading/writing yaml, getting the multiarch job for a container, ...
 
 ## Pulling images with Apptainer, Podman, or Sarus
 
@@ -121,6 +78,10 @@ Get a login token from AWS:
 [secret]
 ```
 
+**Note that all images are also available from the GitHub Container Registry (GHCR), i.e.,
+via `apptainer pull docker://ghcr.io/bluebrain/spack-neurodamus-neocortex`. The URL has to
+be all lowercase, and the download will work without login.**
+
 ### Pulling with Apptainer (or Singularity)
 
 Pull from the registry, logging in at the same time with the `AWS` username and token from
@@ -130,6 +91,9 @@ above:
 ```
 The resulting `neurodamus-neocortex.sif` file is the container and can be copied to a
 better storage location as desired.
+
+NB: `apptainer` and `singularity` may, in almost all circumstances, be treated
+interchangeably.
 
 ### Pulling with Podman
 
@@ -147,6 +111,78 @@ Then pull the full `repositoryUri`:
 Everything in Sarus goes into one command:
 ```
 ❯ sarus pull --login -u AWS 130659266700.dkr.ecr.us-east-1.amazonaws.com/spacktainers/neurodamus-neocortex
+```
+
+## Running the containers
+
+**To have the best results possible, it is imperative that when running on clusters,
+`srun` is called with `srun --mpi=pmi2` to have the MPI in the container interface
+properly with the MPI on the cluster.**
+
+With all container runtime engines, directories that contain the data to be processed and
+output directories have to be mounted inside the container.
+The following two examples show how to do this on either CSCS or SCITAS.
+
+Also note that the Python paths given in these examples may vary between containers.  It
+is best to first run a container interactively and make sure that `init.py` is properly
+located.
+
+### Running with Sarus
+
+The following is a submission file that shows how to run Neurodamus on Eiger at CSCS.
+Note the invocation of Sarus with `sarus run --mpi` _as well as_ `srun --mpi=pmi2`.  This
+also shows how to mount data directories:
+```
+#!/bin/bash
+#SBATCH --account=g156
+#SBATCH --partition=normal
+#SBATCH --nodes=16
+#SBATCH --tasks-per-node=128
+#SBATCH --exclusive
+##SBATCH --mem=0
+#SBATCH --constraint=mc
+#SBATCH --time=04:00:00
+
+WORKDIR=/project/g156/magkanar/ticket
+DATADIR=/project/g156/NSETM-1948-extract-hex-O1/O1_data_physiology/
+IMAGE=130659266700.dkr.ecr.us-east-1.amazonaws.com/spacktainers/neurodamus-neocortex
+
+srun --mpi=pmi2 \
+	sarus run --mpi \
+			--env=HDF5_USE_FILE_LOCKING=FALSE \
+			--workdir=${PWD} \
+			--mount=type=bind,source=${DATADIR},destination=${DATADIR} \
+			--mount=type=bind,source=${PWD},destination=${PWD} \
+		${IMAGE} \
+		special -mpi -python /opt/view/lib/python3.13/site-packages/neurodamus/data/init.py --configFile=${PWD}/simulation_config_O1_full.json --enable-shm=OFF --coreneuron-direct-mode
+```
+
+### Running with Apptainer
+
+The following is a submission file that shows how to run Neurodamus on Jed from SCITAS.
+Note that the `/work` directory with data was mounted with `-B /work/lnmc`:
+```
+#!/bin/zsh
+#
+#SBATCH --nodes 2
+#SBATCH --qos parallel
+#SBATCH --tasks-per-node 72
+#SBATCH --time 2:00:0
+
+CONFIG=/work/lnmc/barrel_cortex/mouse-simulations/simulation_config.json
+OUTPUT=/work/lnmc/matthias_test_delete_me_please/apptainah
+
+srun --mpi=pmi2 \
+	apptainer run -B /work/lnmc/ -B ${HOME} /work/lnmc/software/containers/spack-neurodamus-neocortex_latest.sif \
+		special \
+		-mpi \
+		-python \
+		/opt/view/lib/python3.13/site-packages/neurodamus/data/init.py \
+		--configFile=${HOME}/simulation_config.json \
+		--enable-shm=OFF \
+		--coreneuron-direct-mode \
+		--output-path=${OUTPUT} \
+		--lb-mode=WholeCell
 ```
 
 ## Reproducing GitHub Action builds containerized
@@ -216,6 +252,24 @@ FROM ghcr.io/bluebrain/spack-runtime AS runtime
 COPY --from=builder /etc/debian_version /etc/debian_version
 ```
 This will still require a local GPG key pair to sign packages!
+
+### Converting images to Singularity SIF locally
+
+To convert images to Singularity locally, it seems simplest to first start a local
+Docker registry:
+```
+❯ podman container run -dt -p 5000:5000 --name registry docker.io/library/registry:2
+```
+
+Then build, tag, and upload a Dockerfile to the registry:
+```
+❯ podman build -v $PWD:/src . -t localhost:5000/td
+❯ podman push localhost:5000/td
+```
+The image from the registry can now be converted:
+```
+❯ SINGULARITY_NOHTTPS=1 singularity pull docker://localhost:5000/td:latest
+```
 
 ## Reproducing GitHub Action builds locally (outside a container)
 
