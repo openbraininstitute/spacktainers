@@ -98,7 +98,7 @@ ONBUILD RUN . /etc/profile.d/modules.sh
 
 # Set the git token for CI builds
 ONBUILD ARG CI_JOB_TOKEN
-ONBUILD RUN if [[ -n "${CI_JOB_TOKEN}" ]]; then git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
+# ONBUILD RUN if [[ -n "${CI_JOB_TOKEN}" ]]; then git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
 
 # Set the git token for manual builds
 ONBUILD ARG GITLAB_PRIVATE_TOKEN
