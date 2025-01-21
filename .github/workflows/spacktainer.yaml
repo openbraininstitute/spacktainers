@@ -18,7 +18,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GHCR_PATH: /bluebrain/spack-builder
+          GHCR_PATH: /openbraininstitute/spack-builder
           BUILD_PATH: builder
           BUILDAH_EXTRA_ARGS: --label org.opencontainers.image.revision="$GITHUB_SHA"
             --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
@@ -48,7 +48,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GHCR_PATH: /bluebrain/spack-runtime
+          GHCR_PATH: /openbraininstitute/spack-runtime
           BUILD_PATH: runtime
           BUILDAH_EXTRA_ARGS: --label org.opencontainers.image.revision="$GITHUB_SHA"
             --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
@@ -107,7 +107,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GHCR_PATH: /bluebrain/spack-${{ matrix.spacktainer }}
+          GHCR_PATH: /openbraininstitute/spack-${{ matrix.spacktainer }}
           BUILD_PATH: container_definitions/amd64/${{ matrix.spacktainer }}
           BUILDAH_EXTRA_ARGS: --label org.opencontainers.image.revision="$GITHUB_SHA"
             --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
