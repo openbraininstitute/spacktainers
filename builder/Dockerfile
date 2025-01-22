@@ -64,7 +64,7 @@ RUN spack config --scope=site add "config:install_tree:padded_length:128" \
 # Set up our repos, ONBUILD will update this
 RUN mkdir $REPOS_ROOT && cd $REPOS_ROOT \
     && pwd && echo $REPOS_ROOT && echo $REPOS_BRANCH && ls -al \
-    && git clone --depth=1 --single-branch --branch $REPOS_BRANCH https://github.com/BlueBrain/spack.git .
+    && git clone --depth=1 --single-branch --branch $REPOS_BRANCH https://github.com/openbraininstitute/spack.git .
 
 # Add custom repositories: order matters, last one will be preferred
 RUN spack repo add --scope=site $REPOS_ROOT/bluebrain/repo-patches
@@ -98,7 +98,7 @@ ONBUILD RUN . /etc/profile.d/modules.sh
 
 # Set the git token for CI builds
 ONBUILD ARG CI_JOB_TOKEN
-ONBUILD RUN if [[ -n "${CI_JOB_TOKEN}" ]]; then git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
+# ONBUILD RUN if [[ -n "${CI_JOB_TOKEN}" ]]; then git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
 
 # Set the git token for manual builds
 ONBUILD ARG GITLAB_PRIVATE_TOKEN
