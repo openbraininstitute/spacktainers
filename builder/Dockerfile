@@ -131,7 +131,9 @@ ONBUILD RUN spack gpg trust ./spack_key
 # Unconditionally sets the view to /opt/view for the runtime container
 ONBUILD RUN spack env activate /opt/spack-environment; \
     spack config add view:/opt/view && \
-    spack config add packages:all:require:target=x86_64_v3 && \
+    if [ "$(uname -m)" != "aarch64" ]; then \
+        spack config add packages:all:require:target=x86_64_v3; \
+    fi && \
     spack config add concretizer:targets:granularity:generic && \
     spack concretize && \
     spack install --show-log-on-error --fail-fast && \
