@@ -5,7 +5,33 @@
 
 After having deployed our software on BB5 as modules for a long time, the move to the cloud calls for a different way of deploying software: containers. They offer more flexibility and will tie us less strongly to any specific cloud provider.
 
-This repository aims to be the one-stop shop for all of our container needs.
+This repository aims to be the one-stop shop for our prodcution-ready container needs.
+
+There are two main ways to create a container:
+
+- [GitHub Actions/AWS Runner](#defining-containers)
+- [Locally](#reproducing-github-action-builds-containerized)
+
+Both methods rely on the [builder Dockerfile](./builder/Dockerfile) to define the container build process. Additionally, there is a smaller [runtime Dockerfile](./runtime/Dockerfile), which is used as the basis for the final container. It ensures that all of the build time requirements are stripped out and limits the container size.
+
+## Builder Image Details
+The builder image serves as the platform with all the necessary tools to compile the programs included in the final Docker image. These tools include the compiler, Spack, and other dependencies. The builder image specifies:
+- The operating system.
+- The Spack cache configuration.
+- The location where all build steps are saved.
+
+Notably, the architecture is left unspecified, ensuring flexibility for various target platforms.
+
+## Customizing Your Container
+After the base builder image is created, your specific container is built on top using Spack. The container is customized to include a remote cache (`build_cache` folder) located in AWS S3.
+- **AWS Access**: If you don’t have access to AWS and believe you need it, please contact Eric. For most development needs, AWS access is unnecessary.
+- **Logs and Cache**: CodeBuild also stores logs from the GitLab action pipelines, and the build cache is accessible in the designated S3 bucket.
+
+## Finalizing the Container
+Once the container build is complete:
+1. Spack, the compiler, and other build-only tools are removed to minimize the image size.
+2. The finalized container image is uploaded to AWS Elastic Container Registry (ECR), where it can be downloaded or used directly in production.
+
 
 ## Defining containers
 
