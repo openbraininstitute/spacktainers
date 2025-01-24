@@ -23,7 +23,7 @@ The builder image serves as the platform with all the necessary tools to compile
 Notably, the architecture is left unspecified, ensuring flexibility for various target platforms.
 
 ## Customizing Your Container
-After the base builder image is created, your specific container is built on top using Spack. The container is customized to include a remote cache (`build_cache` folder) located in AWS CodeBuild.
+After the base builder image is created, your specific container is built on top using Spack. The container is customized to include a remote cache (`build_cache` folder) located in AWS S3.
 - **AWS Access**: If you don’t have access to AWS and believe you need it, please contact Eric. For most development needs, AWS access is unnecessary.
 - **Logs and Cache**: CodeBuild also stores logs from the GitLab action pipelines, and the build cache is accessible in the designated S3 bucket.
 
