@@ -12,7 +12,7 @@ There are two main ways to create a container:
 - [GitHub Actions/AWS Runner](#defining-containers)
 - [Locally](#reproducing-github-action-builds-containerized)
 
-Both methods rely on the [builder Dockerfile](./builder/Dockerfile) to define the container build process. Additionally, there is a smaller [runtime Dockerfile](./runtime/Dockerfile), which is responsible for [TODO Eric – specify functionality].
+Both methods rely on the [builder Dockerfile](./builder/Dockerfile) to define the container build process. Additionally, there is a smaller [runtime Dockerfile](./runtime/Dockerfile), which is used as the basis for the final container. It ensures that all of the build time requirements are stripped out and limits the container size.
 
 ## Builder Image Details
 The builder image serves as the platform with all the necessary tools to compile the programs included in the final Docker image. These tools include the compiler, Spack, and other dependencies. The builder image specifies:
