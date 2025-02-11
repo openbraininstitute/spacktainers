@@ -113,9 +113,7 @@ jobs:
             --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
             org.opencontainers.image.url="https://github.com/${GITHUB_REPOSITORY}"
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
-            --label ch.epfl.bbpgitlab.ci-pipeline-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            --label ch.epfl.bbpgitlab.ci-commit-branch="$GITHUB_REF_NAME" --build-arg
-            SPACK_BRANCH=develop --build-arg CACHE_BUCKET=${{ secrets.AWS_CACHE_BUCKET }}
+            --build-arg SPACK_BRANCH=develop --build-arg CACHE_BUCKET=${{ secrets.AWS_CACHE_BUCKET }}
             --build-arg MIRROR_AUTH_ARG="\"--s3-access-key-id='${{ secrets.AWS_CACHE_ACCESS_KEY_ID }}
             --s3-access-key-secret=${{ secrets.AWS_CACHE_SECRET_ACCESS_KEY }}'\""
           # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
@@ -123,3 +121,51 @@ jobs:
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
+  convert-to-singularity:
+    runs-on: ubuntu-latest
+    needs: [spacktainer-build-job]
+    strategy:
+      matrix:
+        spacktainer:
+          - appositionizer
+          - brain-indexer
+          # - brayns
+          - connectome-manipulator
+          - functionalizer
+          # - multiscale-run
+          - neurodamus-hippocampus
+          - neurodamus-neocortex
+          - neurodamus-thalamus
+          - system-benchmarks
+    steps:
+      - name: Install singularity
+        run: |-
+          sudo wget -O- http://neuro.debian.net/lists/xenial.us-ca.full | sudo tee /etc/apt/sources.list.d/neurodebian.sources.list
+          sudo apt-key adv --recv-keys --keyserver hkp://pool.sks-keyservers.net:80 0xA5D32F012649A5A9
+          sudo apt-get update
+          sudo apt-get install -y build-essentials libssl-dev uuid-dev libgpgme11-dev squashfs-tools libseccomp-dev pkg-config
+          sudo apt-get install -y singularity-container
+          singularity --version
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credential@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+          aws-secret-access-key-id: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Authenticate with ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Convert container
+        run: |-
+          export SINGULARITY_DOCKER_USERNAME=${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+          export SINGULARITY_DOCKER_PASSWORD=${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+          singularity pull --no-https "${{ matrix.spacktainer }}.sif" "docker://${{ secrets.AWS_ECR_URL }}/spacktainers/${{ matrix.spacktainer }}:latest"
+      - name: Drop container in S3 bucket
+        uses: keithweaver/aws-s3-github-action@v1.0.0
+        with:
+          command: cp
+          source: ./${{ matrix.spacktainer }}.sif
+          destination: s3://${{ secrets.S3_BUCKET }}/${{ vars.S3_CONTAINER_ROOT }}/${{
+            matrix.spacktainer }}.sif
+          aws_access_key_id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+          aws_region: ${{ vars.AWS_REGION }}
