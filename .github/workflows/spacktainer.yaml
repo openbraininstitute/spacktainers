@@ -6,6 +6,7 @@ on:
 jobs:
   builder-container-job:
     if: ${{ github.event.label_name == 'build' }}
+    environment: sandbox-hpc
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
@@ -37,6 +38,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   runtime-container-job:
     if: ${{ github.event.label_name == 'build' }}
+    environment: sandbox-hpc
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
@@ -68,6 +70,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   spacktainer-build-job:
     if: ${{ github.event.label_name == 'build' }}
+    environment: sandbox-hpc
     strategy:
       matrix:
         spacktainer:
@@ -128,6 +131,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   convert-to-singularity:
     if: ${{ github.event.label_name == 'build' }}
+    environment: sandbox-hpc
     runs-on: ubuntu-latest
     needs: [spacktainer-build-job]
     strategy:
@@ -170,8 +174,8 @@ jobs:
         with:
           command: cp
           source: ./${{ matrix.spacktainer }}.sif
-          destination: s3://${{ secrets.S3_BUCKET }}/${{ vars.S3_CONTAINER_ROOT }}/${{
-            matrix.spacktainer }}.sif
+          destination: s3://${{ secrets.S3_SINGULARITY_BUCKET }}/${{ vars.S3_CONTAINER_ROOT
+            }}/${{ matrix.spacktainer }}.sif
           aws_access_key_id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
           aws_region: ${{ vars.AWS_REGION }}
