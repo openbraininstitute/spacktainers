@@ -1,0 +1,17 @@
+---
+name: Notify the user there is no automatic build
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  notify-user:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Notify user
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |-
+            Builds are only triggered when a label 'build' is added to the pull request, and only upon adding the label.
+            If you want to trigger another build, remove the label and add it again.

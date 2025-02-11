@@ -1,8 +1,11 @@
 ---
 name: Build Spacktainers
-on: [push]
+on:
+  pull_request:
+    types: [labeled]
 jobs:
   builder-container-job:
+    if: ${{ github.event.label_name == 'build' }}
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
@@ -33,6 +36,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   runtime-container-job:
+    if: ${{ github.event.label_name == 'build' }}
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
@@ -63,6 +67,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   spacktainer-build-job:
+    if: ${{ github.event.label_name == 'build' }}
     strategy:
       matrix:
         spacktainer:
@@ -122,6 +127,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   convert-to-singularity:
+    if: ${{ github.event.label_name == 'build' }}
     runs-on: ubuntu-latest
     needs: [spacktainer-build-job]
     strategy:
