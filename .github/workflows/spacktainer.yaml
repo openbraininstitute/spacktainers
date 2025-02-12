@@ -3,6 +3,9 @@ name: Build Spacktainers
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.base_ref }}
+  cancel-in-progress: false
 jobs:
   matrix:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'build') }}
