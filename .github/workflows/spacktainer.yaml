@@ -81,7 +81,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   spacktainer-build-job:
-    if: ${{ contains(github.event.label.name, 'build') }}
+    if: ${{ contains(github.event.label.name, 'build') && ! failure() && ! cancelled() }}
     environment: sandbox-hpc
     strategy:
       matrix:
