@@ -13,6 +13,5 @@ jobs:
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: |-
-            Builds are only triggered when a certain label is added to the pull request, and only upon adding the label.
-            If you want to trigger another build, remove the label and add it again.
+            Builds are only triggered on pull requests which have either the `build` or the `build-with-base` label.
             Add the label `build-with-base` if you want to build the runtime and builder containers in addition to the spacktainers, add the label `build` to build just the spacktainers.
