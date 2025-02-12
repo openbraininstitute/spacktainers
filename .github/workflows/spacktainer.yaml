@@ -132,7 +132,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   convert-to-singularity:
-    if: ${{ github.event.label.name == 'build' }}
+    if: ${{ contains(github.event.label.name, 'build') }}
     environment: sandbox-hpc
     runs-on: ubuntu-latest
     needs: [spacktainer-build-job, matrix]
