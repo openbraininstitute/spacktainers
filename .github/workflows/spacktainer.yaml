@@ -17,7 +17,7 @@ jobs:
           SPACKTAINERS=$(echo $(cat .github/workflows/matrix.json) | sed 's/ //g')
           echo "matrix=${SPACKTAINERS}" >> "${GITHUB_OUTPUT}"
   builder-container-job:
-    if: ${{ github.event.label.name == 'build' }}
+    if: ${{ github.event.label.name == 'build-with-base' }}
     environment: sandbox-hpc
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
@@ -49,7 +49,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   runtime-container-job:
-    if: ${{ github.event.label.name == 'build' }}
+    if: ${{ github.event.label.name == 'build-with-base' }}
     environment: sandbox-hpc
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
@@ -81,7 +81,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   spacktainer-build-job:
-    if: ${{ github.event.label.name == 'build' }}
+    if: ${{ contains(github.event.label.name, 'build') }}
     environment: sandbox-hpc
     strategy:
       matrix:
