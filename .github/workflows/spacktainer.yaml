@@ -170,7 +170,7 @@ jobs:
         with:
           command: cp
           source: ./${{ matrix.spacktainer }}.sif
-          destination: s3://${{ secrets.S3_SINGULARITY_BUCKET }}/${{ vars.S3_CONTAINER_ROOT
+          destination: s3://${{ secrets.S3_SINGULARITY_BUCKET }}/${{ secrets.S3_CONTAINER_ROOT
             }}/${{ matrix.spacktainer }}.sif
           aws_access_key_id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
