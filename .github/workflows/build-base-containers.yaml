@@ -1,0 +1,70 @@
+---
+name: Build Base Containers
+on:
+  workflow_call:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.base_ref }}
+  cancel-in-progress: false
+jobs:
+  builder-container-job:
+    environment: sandbox-hpc
+    runs-on:
+      - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
+      - instance-size:small
+    steps:
+      - name: clone repo
+        uses: actions/checkout@v4
+      - name: create builder
+        uses: ./.github/actions/build_container
+        with:
+          AWS_ECR_URL: ${{ secrets.AWS_ECR_URL }}
+          AWS_ECR_PATH: /spacktainers/builder
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_PATH: /openbraininstitute/spack-builder
+          BUILD_PATH: builder
+          BUILDAH_EXTRA_ARGS: --label org.opencontainers.image.revision="$GITHUB_SHA"
+            --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
+            org.opencontainers.image.url="https://github.com/${GITHUB_REPOSITORY}"
+            --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
+            --label ch.epfl.bbpgitlab.ci-pipeline-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            --label ch.epfl.bbpgitlab.ci-commit-branch="$GITHUB_REF_NAME" --build-arg
+            SPACK_BRANCH=develop
+         # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
+          SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
+  runtime-container-job:
+    environment: sandbox-hpc
+    runs-on:
+      - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
+      - instance-size:small
+    steps:
+      - name: clone repo
+        uses: actions/checkout@v4
+      - name: create runtime
+        uses: ./.github/actions/build_container
+        with:
+          AWS_ECR_URL: ${{ secrets.AWS_ECR_URL }}
+          AWS_ECR_PATH: /spacktainers/runtime
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_PATH: /openbraininstitute/spack-runtime
+          BUILD_PATH: runtime
+          BUILDAH_EXTRA_ARGS: --label org.opencontainers.image.revision="$GITHUB_SHA"
+            --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
+            org.opencontainers.image.url="https://github.com/${GITHUB_REPOSITORY}"
+            --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
+            --label ch.epfl.bbpgitlab.ci-pipeline-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            --label ch.epfl.bbpgitlab.ci-commit-branch="$GITHUB_REF_NAME" --build-arg
+            SPACK_BRANCH=develop
+         # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
+          SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}

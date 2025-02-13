@@ -1,0 +1,31 @@
+---
+name: Build Spacktainers
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize, edited]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.base_ref }}
+  cancel-in-progress: false
+jobs:
+  matrix:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base') }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: clone repo
+        uses: actions/checkout@v4
+      - id: set-matrix
+        run: |-
+          SPACKTAINERS=$(echo $(cat .github/workflows/matrix.json) | sed 's/ //g')
+          echo "matrix=${SPACKTAINERS}" >> "${GITHUB_OUTPUT}"
+  build-base-containers:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'build-with-base') }}
+    uses: ./.github/workflows/build-base-containers.yaml
+    secrets: inherit
+  build-spacktainers:
+    if: ${{ always() && needs.spacktainer-build-job.result == 'success' && (contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base')) }}
+    uses: ./.github/workflows/build-spacktainers.yaml
+    needs: [matrix, build-base-containers]
+    with:
+      spacktainers: ${{ needs.matrix.outputs.matrix }}
