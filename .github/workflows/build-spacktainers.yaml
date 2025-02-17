@@ -1,18 +1,22 @@
 ---
-name: Build Base Containers
+name: Build Spacktainers
 on:
   workflow_call:
     inputs:
       spacktainers:
-        description: list of spacktainers to build
+        description: List of spacktainers to build
         required: true
         type: list
+      environment:
+        description: Which AWS environment to put the containers in
+        type: string
+        default: sandbox-hpc
 concurrency:
   group: ${{ github.workflow }}-${{ github.base_ref }}
   cancel-in-progress: false
 jobs:
   spacktainer-build-job:
-    environment: sandbox-hpc
+    environment: ${{ inputs.environment }}
     strategy:
       matrix:
         spacktainer: ${{ fromJson(inputs.spacktainers) }}
@@ -62,7 +66,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   convert-to-singularity:
     if: ${{ always() && needs.spacktainer-build-job.result == 'success' }}
-    environment: sandbox-hpc
+    environment: ${{ inputs.environment }}
     runs-on: ubuntu-latest
     needs: [spacktainer-build-job]
     strategy:

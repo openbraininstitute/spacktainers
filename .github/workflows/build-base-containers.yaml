@@ -2,12 +2,17 @@
 name: Build Base Containers
 on:
   workflow_call:
+    inputs:
+      environment:
+        description: Which AWS environment to put the containers in
+        type: string
+        default: sandbox-hpc
 concurrency:
   group: ${{ github.workflow }}-${{ github.base_ref }}
   cancel-in-progress: false
 jobs:
   builder-container-job:
-    environment: sandbox-hpc
+    environment: ${{ inputs.environment }}
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
@@ -38,7 +43,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   runtime-container-job:
-    environment: sandbox-hpc
+    environment: ${{ inputs.environment }}
     runs-on:
       - codebuild-spacktainers-tf-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:small
