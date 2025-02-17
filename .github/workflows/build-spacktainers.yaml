@@ -11,7 +11,53 @@ on:
         description: Which AWS environment to put the containers in
         type: string
         default: sandbox-hpc
+      obi-spack-commit:
+        description: Branch, Tag or Commit SHA for the OBI Spack repo
+        type: string
+        required: true
+      upstream-spack-commit:
+        description: Branch, Tag or Commit SHA for the upstream Spack repo
+        type: string
+        required: true
 jobs:
+  determine-container-checksum:
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        spacktainer: ${{ fromJson(inputs.spacktainers) }}
+    steps:
+      - name: Clone spack
+        uses: actions/checkout@v4
+        with:
+          repo: spack/spack
+          commit: ${{ inputs.upstream-spack-commit }}
+      - name: Clone spack
+        uses: actions/checkout@v4
+        with:
+          repo: openbraininstitute/spack
+          commit: ${{ inputs.obi-spack-commit }}
+          folder: /opt/spack-repos
+      - name: Calculate container checksum
+        id: container-checksum
+        run: |-
+          source spack/share/spack/setup-env.sh
+          spack repo add --scope=site /opt/spack-repos/bluebrain/repo-patches
+          spack repo add --scope=site /opt/spack-repos/bluebrain/repo-bluebrain
+          echo container_checksum=$((spack spec ${{ matrix.spacktainer }} | sha256sum)) >> "${GITHUB_OUTPUT}"
+      - name: Get container version
+        id: container-version
+        run: |-
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install click ruamel.yaml
+          echo container_version=$(./scripts/container_info.py -a amd64 -n ${{ matrix.spacktainer }}) >> "${GITHUB_OUTPUT}"
+      - name: Get remote container checksum
+        run: |-
+          skopeo
+      - name: Get remote container version
+        run: |-
+          skopeo
   spacktainer-build-job:
     environment: ${{ inputs.environment }}
     strategy:
