@@ -135,7 +135,7 @@ jobs:
           SPACK_DEPLOYMENT_KEY_PUB: ${{ secrets.SPACK_DEPLOYMENT_KEY_PUB }}
           SPACK_DEPLOYMENT_KEY_PRIVATE: ${{ secrets.SPACK_DEPLOYMENT_KEY_PRIVATE }}
   convert-to-singularity:
-    if: ${{ always() && needs.spacktainer-build-job.result == 'success' && contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base') }}
+    if: ${{ always() && needs.spacktainer-build-job.result == 'success' && (contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base')) }}
     environment: sandbox-hpc
     runs-on: ubuntu-latest
     needs: [spacktainer-build-job, matrix]
