@@ -135,6 +135,7 @@ ONBUILD RUN spack env activate /opt/spack-environment; \
         spack config add packages:all:require:target=x86_64_v3; \
     fi && \
     spack config add concretizer:targets:granularity:generic && \
+    spack config blame concretizer && \
     spack concretize && \
     spack install --show-log-on-error --fail-fast && \
     spack gc -y
