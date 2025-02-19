@@ -1,0 +1,17 @@
+---
+name: Notify the user there is no automatic build
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  notify-user:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Notify user
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |-
+            Builds are only triggered on pull requests which have either the `build` or the `build-with-base` label.
+            Add the label `build-with-base` if you want to build the runtime and builder containers in addition to the spacktainers, add the label `build` to build just the spacktainers.
