@@ -30,6 +30,7 @@ jobs:
   build-spacktainers:
     if: ${{ ! failure() && ! cancelled() }}  # build even if build-base-containers is skipped, but not if it failed or was cancelled
     uses: ./.github/workflows/build-spacktainers.yaml
+    secrets: inherit
     needs: [build-base-containers]
     with:
       spacktainers: ${{ toJson("[ inputs.spacktainer ]") }}

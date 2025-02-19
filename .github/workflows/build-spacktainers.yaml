@@ -6,14 +6,11 @@ on:
       spacktainers:
         description: List of spacktainers to build
         required: true
-        type: list
+        type: string
       environment:
         description: Which AWS environment to put the containers in
         type: string
         default: sandbox-hpc
-concurrency:
-  group: ${{ github.workflow }}-${{ github.base_ref }}
-  cancel-in-progress: false
 jobs:
   spacktainer-build-job:
     environment: ${{ inputs.environment }}

@@ -7,9 +7,6 @@ on:
         description: Which AWS environment to put the containers in
         type: string
         default: sandbox-hpc
-concurrency:
-  group: ${{ github.workflow }}-${{ github.base_ref }}
-  cancel-in-progress: false
 jobs:
   builder-container-job:
     environment: ${{ inputs.environment }}

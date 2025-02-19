@@ -28,6 +28,7 @@ jobs:
   build-spacktainers:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base') && ! failure() && ! cancelled() }}
     uses: ./.github/workflows/build-spacktainers.yaml
+    secrets: inherit
     needs: [matrix, build-base-containers]
     with:
       spacktainers: ${{ needs.matrix.outputs.matrix }}
