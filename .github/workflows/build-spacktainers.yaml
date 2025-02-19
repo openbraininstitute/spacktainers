@@ -56,8 +56,8 @@ jobs:
             --label org.opencontainers.image.authors="$GITHUB_TRIGGERING_ACTOR" --label
             org.opencontainers.image.url="https://github.com/${GITHUB_REPOSITORY}"
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
-            --build-arg SPACK_BRANCH=develop --build-arg CACHE_BUCKET=${{ secrets.AWS_CACHE_BUCKET }}
-            --build-arg MIRROR_AUTH_ARG="\"--s3-access-key-id='${{ secrets.AWS_CACHE_ACCESS_KEY_ID }}
+            --build-arg SPACK_BRANCH=114bd5744f6a0e4d423ae902e2b75c9fb00bc8e9 --build-arg
+            CACHE_BUCKET=${{ secrets.AWS_CACHE_BUCKET }} --build-arg MIRROR_AUTH_ARG="\"--s3-access-key-id='${{ secrets.AWS_CACHE_ACCESS_KEY_ID }}
             --s3-access-key-secret=${{ secrets.AWS_CACHE_SECRET_ACCESS_KEY }}'\""
           # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
           DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}

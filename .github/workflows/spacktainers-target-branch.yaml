@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   matrix:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'build') }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'build') || contains(github.event.pull_request.labels.*.name, 'build-with-base') }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
