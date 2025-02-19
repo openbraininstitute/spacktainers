@@ -40,7 +40,7 @@ RUN ln -s $SPACK_ROOT/share/spack/docker/entrypoint.bash \
 
 RUN cp $SPACK_ROOT/share/spack/docker/modules.yaml \
     $SPACK_ROOT/etc/spack/modules.yaml \
-    && rm -rf /root/*.* /run/nologin $SPACK_ROOT/.git
+    && rm -rf /root/*.* /run/nologin
 
 # [WORKAROUND]
 # https://superuser.com/questions/1241548/
@@ -126,13 +126,15 @@ ONBUILD COPY key spack_key
 ONBUILD RUN spack gpg trust ./spack_key.pub
 ONBUILD RUN spack gpg trust ./spack_key
 
+ONBUILD RUN pushd ${SPACK_ROOT} && git log && rm -rf $SPACK_ROOT/.git && popd
+
 # Install the software, remove unnecessary deps
 #
 # Unconditionally sets the view to /opt/view for the runtime container
 ONBUILD RUN spack env activate /opt/spack-environment; \
     spack config add view:/opt/view && \
     if [ "$(uname -m)" != "aarch64" ]; then \
-        spack config add packages:all:require:target=x86_64_v3; \
+    spack config add packages:all:require:target=x86_64_v3; \
     fi && \
     spack config add concretizer:targets:granularity:generic && \
     spack config blame concretizer && \
