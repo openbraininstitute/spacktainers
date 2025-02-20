@@ -1,0 +1,37 @@
+---
+name: Manual - Build One Spacktainer
+on:
+  workflow_dispatch:
+    inputs:
+      spacktainer:
+        description: Which spacktainer to build
+        type: string
+        required: true
+      base_containers:
+        description: Whether the base containers (builder and runtime) need to be
+          built
+        type: bool
+        required: true
+      environment:
+        description: Which AWS environment to put the containers in
+        type: list
+        default: sandbox-hpc
+        choices: [sandbox-hpc, staging, production]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.base_ref }}
+  cancel-in-progress: false
+jobs:
+  build-base-containers:
+    if: ${{ inputs.base_containers == true }}
+    uses: ./.github/workflows/build-base-containers.yaml
+    secrets: inherit
+    with:
+      environment: ${{ inputs.environment }}
+  build-spacktainers:
+    if: ${{ ! failure() && ! cancelled() }}  # build even if build-base-containers is skipped, but not if it failed or was cancelled
+    uses: ./.github/workflows/build-spacktainers.yaml
+    secrets: inherit
+    needs: [build-base-containers]
+    with:
+      spacktainers: ${{ toJson("[ inputs.spacktainer ]") }}
+      environment: ${{ inputs.environment }}
