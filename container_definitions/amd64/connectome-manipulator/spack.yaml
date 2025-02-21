@@ -2,12 +2,13 @@
 spack:
   specs: [parquet-converters, py-connectome-manipulator]
   concretizer:
-    unify: when_possible
+    unify: true
   packages:
-    py-pandas:
-      require: ~performance  # Otherwise pulls in numba that requires outdated LLVM
     py-numpy-quaternion:
       require: ~numba~scipy  # See above, get around Numba
+    boost:
+      variants: cxxstd=11
     all:
       providers:
         mpi: [mpich]
+
