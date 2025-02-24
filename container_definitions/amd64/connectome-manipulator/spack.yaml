@@ -5,7 +5,7 @@ spack:
     unify: when_possible
   packages:
     py-numpy-quaternion:
-      require: ~numba~scipy  # See above, get around Numba
+      require: ~numba~scipy
     boost:
       variants: cxxstd=11
     all:
