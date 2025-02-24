@@ -33,5 +33,5 @@ jobs:
     secrets: inherit
     needs: [build-base-containers]
     with:
-      spacktainers: '[ ${{ inputs.spacktainer }} ]'
+      spacktainers: '[ "${{ inputs.spacktainer }}" ]'
       environment: ${{ inputs.environment }}
