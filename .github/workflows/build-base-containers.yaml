@@ -33,7 +33,7 @@ jobs:
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
             --label ch.epfl.bbpgitlab.ci-pipeline-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             --label ch.epfl.bbpgitlab.ci-commit-branch="$GITHUB_REF_NAME" --build-arg
-            SPACK_BRANCH=114bd5744f6a0e4d423ae902e2b75c9fb00bc8e9
+            SPACK_BRANCH=develop --build-arg REPOS_BRANCH=develop
          # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
           DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -64,7 +64,7 @@ jobs:
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
             --label ch.epfl.bbpgitlab.ci-pipeline-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             --label ch.epfl.bbpgitlab.ci-commit-branch="$GITHUB_REF_NAME" --build-arg
-            SPACK_BRANCH=114bd5744f6a0e4d423ae902e2b75c9fb00bc8e9
+            SPACK_BRANCH=develop --build-arg REPOS_BRANCH=develop
          # ' --label org.opencontainers.image.created="$CI_JOB_STARTED_AT"'
           DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
