@@ -2,7 +2,7 @@
 spack:
   specs: [parquet-converters, py-connectome-manipulator]
   concretizer:
-    unify: when_possible
+    unify: true
   packages:
     py-numpy-quaternion:
       require: ~numba~scipy
