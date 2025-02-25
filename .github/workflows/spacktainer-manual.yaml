@@ -10,13 +10,13 @@ on:
       base_containers:
         description: Whether the base containers (builder and runtime) need to be
           built
-        type: bool
+        type: boolean
         required: true
       environment:
         description: Which AWS environment to put the containers in
-        type: list
+        type: choice
         default: sandbox-hpc
-        choices: [sandbox-hpc, staging, production]
+        options: [sandbox-hpc, staging, production]
 concurrency:
   group: ${{ github.workflow }}-${{ github.base_ref }}
   cancel-in-progress: false
@@ -33,5 +33,5 @@ jobs:
     secrets: inherit
     needs: [build-base-containers]
     with:
-      spacktainers: ${{ toJson("[ inputs.spacktainer ]") }}
+      spacktainers: '[ "${{ inputs.spacktainer }}" ]'
       environment: ${{ inputs.environment }}
