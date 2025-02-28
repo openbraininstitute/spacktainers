@@ -10,3 +10,4 @@ venv
 merged_*
 processed_*
 sandbox
+debug/*

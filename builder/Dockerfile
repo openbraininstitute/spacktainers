@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=ubuntu:24.04
 ARG CACHE_BUCKET="s3://spacktainers-cache-da4e51"
-ARG SPACK_BRANCH="fdedb6f95d09c7f7a78ebce827ba0092b82c8f21"
-ARG REPOS_BRANCH="matz-e/spacktainer-readiness"
+ARG SPACK_BRANCH="v0.23.1"
+ARG REPOS_BRANCH="develop"
 FROM $BASE_IMAGE as bootstrap
 
 ENV SPACK_ROOT=/opt/spack \
@@ -108,7 +108,7 @@ ONBUILD RUN git config --list
 
 ONBUILD ARG MIRROR_URL_ARG
 ONBUILD ARG MIRROR_AUTH_ARG
-ONBUILD ARG REPOS_BRANCH="matz-e/spacktainer-readiness"
+ONBUILD ARG REPOS_BRANCH="develop"
 ONBUILD ARG CACHE_BUCKET
 ONBUILD RUN if [ -n "${CACHE_BUCKET}" ]; then \
     echo spack mirror add --scope=site --autopush ${MIRROR_URL_ARG} ${MIRROR_AUTH_ARG} build_s3 s3://${CACHE_BUCKET}; \
