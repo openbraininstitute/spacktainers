@@ -3,8 +3,8 @@ ARG BASE_IMAGE=ubuntu:24.04
 FROM $BASE_IMAGE
 
 ONBUILD RUN apt-get update \
-         && apt-get install -y libatomic1 libgfortran5 libgomp1 binutils \
-         && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y libatomic1 libgfortran5 libgomp1 binutils  gdb \
+    && rm -rf /var/lib/apt/lists/*
 
 ONBUILD COPY --from=builder /opt/spack-environment /opt/spack-environment
 ONBUILD COPY --from=builder /opt/software /opt/software
