@@ -3,6 +3,8 @@ spack:
     - neurodamus-models model=neocortex ~plasticity+coreneuron+caliper
     - py-neurodamus
   packages:
+    neuron:
+      require: "build_type=Debug"
     all:
       providers:
         mpi: [mpich]
