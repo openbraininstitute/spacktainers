@@ -3,6 +3,10 @@ spack:
     - neurodamus-models model=neocortex ~plasticity+coreneuron+caliper
     - py-neurodamus
   packages:
+    neuron:
+      require: "build_type=Debug"
+    libfabric:
+      require: fabrics=shm.efa,sockets,tcp,udp
     all:
       providers:
-        mpi: [mpich]
+        mpi: [openmpi]
