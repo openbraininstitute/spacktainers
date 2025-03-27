@@ -6,7 +6,7 @@ spack:
     neuron:
       require: "build_type=Debug"
     libfabric:
-      require: fabrics=shm.efa,sockets,tcp,udp
+      require: fabrics=shm,efa,sockets,tcp,udp
     all:
       providers:
         mpi: [openmpi]
