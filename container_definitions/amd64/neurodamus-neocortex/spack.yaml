@@ -7,6 +7,8 @@ spack:
       require: "build_type=Debug"
     libfabric:
       require: fabrics=shm,efa,sockets,tcp,udp
+    openmpi:
+     require: fabrics=ofi
     all:
       providers:
         mpi: [openmpi]
