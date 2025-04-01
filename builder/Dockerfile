@@ -11,8 +11,7 @@ ENV SPACK_ROOT=/opt/spack \
     container=docker
 
 RUN apt-get update \
-    && apt-get install -y build-essential curl environment-modules file gcc-12 g++-12 gfortran gfortran-12 git python3 python3-boto3 rpm unzip \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y build-essential curl environment-modules file gcc-12 g++-12 gfortran gfortran-12 git python3 python3-boto3 rpm unzip
 
 # Yes, again. Line 1 by itself is not enough to export this ARG into the shell in RUN
 ARG BASE_IMAGE
@@ -30,6 +29,8 @@ RUN curl -O https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz 
     && ./efa_installer.sh -y --skip-kmod \
     && cd .. \
     && rm -rf aws-efa-installer*
+
+RUN rm -rf /var/lib/apt/lists/*
 
 RUN echo "Cloning spack branch $SPACK_BRANCH"
 RUN mkdir $SPACK_ROOT && cd $SPACK_ROOT \
