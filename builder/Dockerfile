@@ -24,6 +24,13 @@ ARG REPOS_BRANCH
 
 SHELL ["/bin/bash", "--login", "-c"]
 
+RUN curl -O https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz \
+    && tar -xf aws-efa-installer-latest.tar.gz \
+    && cd aws-efa-installer \
+    && ./efa_installer.sh -y --skip-kmod \
+    && cd .. \
+    && rm -rf aws-efa-installer*
+
 RUN echo "Cloning spack branch $SPACK_BRANCH"
 RUN mkdir $SPACK_ROOT && cd $SPACK_ROOT \
     && git init -b haupt \
@@ -56,7 +63,8 @@ SHELL ["docker-shell"]
 RUN spack compiler find --scope=site \
     && spack compiler list
 # OpenGL cannot be build by Spack
-RUN spack external find --scope=site opengl
+RUN spack external find --scope=site opengl \
+    && spack external find -p /opt/amazon/openmpi5 --scope site openmpi
 
 RUN spack config --scope=site add "config:install_tree:padded_length:128" \
     && spack config --scope=site add "config:install_tree:root:/opt/software"

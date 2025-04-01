@@ -8,7 +8,7 @@ spack:
     libfabric:
       require: fabrics=shm,efa,sockets,tcp,udp
     openmpi:
-     require: fabrics=ofi
+      require: fabrics=ofi,ucx
     all:
       providers:
         mpi: [openmpi]
