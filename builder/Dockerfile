@@ -110,22 +110,27 @@ ONBUILD ARG CI_JOB_TOKEN
 # ONBUILD RUN if [[ -n "${CI_JOB_TOKEN}" ]]; then git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
 
 # Set the git token for manual builds
+ONBUILD RUN echo "01" && ls /opt/software && ls /opt/amazon
 ONBUILD ARG GITLAB_PRIVATE_TOKEN
 ONBUILD RUN if [[ -n "${GITLAB_PRIVATE_TOKEN}" ]]; then git config --global url."https://oauth2:${GITLAB_PRIVATE_TOKEN}@bbpgitlab.epfl.ch/".insteadOf ssh://git@bbpgitlab.epfl.ch/ ; fi
 
+ONBUILD RUN echo "02" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN git config --list
 
 ONBUILD ARG MIRROR_URL_ARG
 ONBUILD ARG MIRROR_AUTH_ARG
 ONBUILD ARG REPOS_BRANCH="develop"
 ONBUILD ARG CACHE_BUCKET
+ONBUILD RUN echo "03" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN if [ -n "${CACHE_BUCKET}" ]; then \
     echo spack mirror add --scope=site --autopush ${MIRROR_URL_ARG} ${MIRROR_AUTH_ARG} build_s3 s3://${CACHE_BUCKET}; \
     spack mirror add --scope=site --autopush ${MIRROR_URL_ARG} ${MIRROR_AUTH_ARG} build_s3 s3://${CACHE_BUCKET}; \
     fi
+ONBUILD RUN echo "04" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN spack config blame mirrors
 
 # Update our repos
+ONBUILD RUN echo "05" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN cd $REPOS_ROOT \
     && git fetch --depth=1 origin $REPOS_BRANCH \
     && git reset --hard FETCH_HEAD
@@ -135,11 +140,13 @@ ONBUILD COPY key spack_key
 ONBUILD RUN spack gpg trust ./spack_key.pub
 ONBUILD RUN spack gpg trust ./spack_key
 
+ONBUILD RUN echo "06" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN pushd ${SPACK_ROOT} && git log && rm -rf $SPACK_ROOT/.git && popd
 
 # Install the software, remove unnecessary deps
 #
 # Unconditionally sets the view to /opt/view for the runtime container
+ONBUILD RUN echo "07" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN spack env activate /opt/spack-environment; \
     spack config add view:/opt/view && \
     if [ "$(uname -m)" != "aarch64" ]; then \
@@ -151,8 +158,10 @@ ONBUILD RUN spack env activate /opt/spack-environment; \
     spack install --show-log-on-error --fail-fast && \
     spack gc -y
 
+ONBUILD RUN echo "08" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN if [ -n "${MIRROR_URL}" ]; then spack mirror rm build_s3; fi
 # Strip all the binaries
+ONBUILD RUN echo "09" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN find -L /opt/view/* -type f -exec readlink -f '{}' \; | \
     xargs file -i | \
     grep 'charset=binary' | \
@@ -160,8 +169,10 @@ ONBUILD RUN find -L /opt/view/* -type f -exec readlink -f '{}' \; | \
     awk -F: '{print $1}' | xargs strip -s
 
 # Modifications to the environment that are necessary to run
+ONBUILD RUN echo "10" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN cd /opt/spack-environment && \
     spack env activate --sh -d . >> /etc/profile.d/z10_spack_environment.sh
+ONBUILD RUN echo "11" && ls /opt/software && ls /opt/amazon
 
 # Singularity by default sets the LD_LIBRARY_PATH to /.singularity.d/libs that includes
 # libraries mounted from the host system. Since spack when enabling the environment might
