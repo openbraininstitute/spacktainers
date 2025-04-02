@@ -26,7 +26,7 @@ SHELL ["/bin/bash", "--login", "-c"]
 RUN curl -O https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz \
     && tar -xf aws-efa-installer-latest.tar.gz \
     && cd aws-efa-installer \
-    && ./efa_installer.sh -y --skip-kmod \
+    && ./efa_installer.sh -y --skip-kmod --debug-packages \
     && cd .. \
     && rm -rf aws-efa-installer*
 
