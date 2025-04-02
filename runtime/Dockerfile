@@ -12,9 +12,9 @@ ONBUILD COPY --from=builder /opt/software /opt/amazon
 ONBUILD COPY --from=builder /opt/._view /opt/._view
 ONBUILD COPY --from=builder /opt/view /opt/view
 ONBUILD COPY --from=builder /etc/profile.d/z10_spack_environment.sh /etc/profile.d/z10_spack_environment.sh
-ONBUILD RUN echo "12" && ls /opt/software && ls /opt/amazon
+ONBUILD RUN echo "erik 12" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN echo "/opt/view/lib" > /etc/ld.so.conf.d/custom.conf && ldconfig -f /etc/ld.so.conf.d/custom.conf
-ONBUILD RUN echo "13" && ls /opt/software && ls /opt/amazon
+ONBUILD RUN echo "erik 13" && ls /opt/software && ls /opt/amazon
 
 ONBUILD ENTRYPOINT ["/bin/bash", "--rcfile", "/etc/profile", "-l", "-c", "$*", "--" ]
 ONBUILD CMD [ "/bin/bash" ]
