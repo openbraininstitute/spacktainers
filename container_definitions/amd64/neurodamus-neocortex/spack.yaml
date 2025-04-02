@@ -1,5 +1,7 @@
 spack:
   specs:
+    - 'libevent@2:'  # external openmpi expects it to be there, spack doesn't add it
+    - hwloc  # external openmpi expects it to be there, spack doesn't add it
     - neurodamus-models model=neocortex ~plasticity+coreneuron+caliper
     - py-neurodamus
   packages:
