@@ -8,7 +8,7 @@ ONBUILD RUN apt-get update \
 
 ONBUILD COPY --from=builder /opt/spack-environment /opt/spack-environment
 ONBUILD COPY --from=builder /opt/software /opt/software
-ONBUILD COPY --from=builder /opt/software /opt/amazon
+ONBUILD COPY --from=builder /opt/amazon /opt/amazon
 ONBUILD COPY --from=builder /opt/._view /opt/._view
 ONBUILD COPY --from=builder /opt/view /opt/view
 ONBUILD COPY --from=builder /etc/profile.d/z10_spack_environment.sh /etc/profile.d/z10_spack_environment.sh
