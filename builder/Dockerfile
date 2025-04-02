@@ -160,10 +160,8 @@ ONBUILD RUN find -L /opt/view/* -type f -exec readlink -f '{}' \; | \
     awk -F: '{print $1}' | xargs strip -s
 
 # Modifications to the environment that are necessary to run
-ONBUILD RUN echo "erik 10" && ls /opt/software && ls /opt/amazon
 ONBUILD RUN cd /opt/spack-environment && \
     spack env activate --sh -d . >> /etc/profile.d/z10_spack_environment.sh
-ONBUILD RUN echo "erik 11" && ls /opt/software && ls /opt/amazon
 
 # Singularity by default sets the LD_LIBRARY_PATH to /.singularity.d/libs that includes
 # libraries mounted from the host system. Since spack when enabling the environment might
